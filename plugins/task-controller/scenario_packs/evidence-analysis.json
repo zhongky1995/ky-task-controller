@@ -1,0 +1,26 @@
+{
+  "id": "evidence-analysis",
+  "version": "1.0.0",
+  "schemaVersion": "1.0",
+  "compatibility": {"taskBlueprint": "^1", "solutionGraph": "^1", "registry": "^1"},
+  "match": {"domains": ["evidence-analysis", "pricing"], "artifactClasses": ["workbook", "analysis-report"], "exclusions": ["creative-only"]},
+  "blueprintDefaults": {"sourceLineage": true, "comparisonModel": "comparable-items"},
+  "graphTemplate": {
+    "nodes": [
+      {"id": "source", "title": "Source normalization", "kind": "evidence", "purpose": "Normalize source data and preserve lineage.", "capabilityRequirements": ["evidence-workbook"], "acceptanceIds": [], "outputContracts": [{"id": "normalized-sources"}]},
+      {"id": "model", "title": "Comparison model", "kind": "modeling", "purpose": "Build the comparable-items model.", "capabilityRequirements": ["evidence-workbook"], "acceptanceIds": [], "outputContracts": [{"id": "comparison-model"}]},
+      {"id": "analysis", "title": "Pricing analysis", "kind": "analysis", "purpose": "Calculate and interpret the comparison.", "dependsOn": ["source", "model"], "capabilityRequirements": ["pricing-analysis"], "acceptanceIds": [], "inputContracts": [{"id": "normalized-sources"}, {"id": "comparison-model"}], "outputContracts": [{"id": "analysis-findings"}]},
+      {"id": "report", "title": "Analysis report", "kind": "implementation", "purpose": "Write the traceable analysis report.", "dependsOn": ["analysis"], "capabilityRequirements": ["evidence-workbook"], "acceptanceIds": [], "writeBoundary": "approved-target", "writeTargets": "$approvedTargets", "inputContracts": [{"id": "analysis-findings"}], "outputContracts": [{"id": "analysis-report"}]},
+      {"id": "review", "title": "Evidence review", "kind": "review", "purpose": "Verify lineage and calculation reproducibility.", "dependsOn": ["report"], "capabilityRequirements": ["evidence-verifier"], "acceptanceIds": ["sources-traceable", "calculations-reproducible"], "writeBoundary": "review-only", "inputContracts": [{"id": "analysis-report"}]}
+    ],
+    "edges": [{"from": "source", "to": "analysis"}, {"from": "model", "to": "analysis"}, {"from": "analysis", "to": "report"}, {"from": "report", "to": "review"}]
+  },
+  "capabilityRequirements": ["pricing-analysis", "evidence-workbook"],
+  "acceptanceCases": [
+    {"id": "sources-traceable", "description": "Every conclusion has source lineage.", "version": "1.0", "method": "readback", "procedure": {"mode": "contains"}, "expected": {"sourceLineage": true}, "evidenceSchema": {"minItems": 1}, "minimumAttestation": "tool_verified"},
+    {"id": "calculations-reproducible", "description": "The comparison calculations can be independently reproduced.", "version": "1.0", "method": "business", "procedure": {"externalVerifier": "evidence-verifier"}, "expected": {"reproducible": true}, "evidenceSchema": {"minItems": 1}, "minimumAttestation": "independent_reviewed"}
+  ],
+  "verifierRequirements": ["evidence-verifier"],
+  "goldenFixtures": ["fixtures/pricing-analysis.json"],
+  "fingerprint": "e7826d364e6acd59cd1130625c0beb88b81d5697af9e42a25c8cd18d20d63e08"
+}

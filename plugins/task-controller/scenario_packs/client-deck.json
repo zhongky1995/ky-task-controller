@@ -1,0 +1,27 @@
+{
+  "id": "client-deck",
+  "version": "1.0.0",
+  "schemaVersion": "1.0",
+  "compatibility": {"taskBlueprint": "^1", "solutionGraph": "^1", "registry": "^1"},
+  "match": {"domains": ["client-deck"], "artifactClasses": ["presentation", "deck"], "exclusions": ["internal-only"]},
+  "blueprintDefaults": {"audience": "client", "review": "client-ready"},
+  "graphTemplate": {
+    "nodes": [
+      {"id": "strategy", "title": "Deck strategy", "kind": "strategy", "purpose": "Define the decision narrative and presentation strategy.", "capabilityRequirements": ["deck-strategy"], "acceptanceIds": [], "outputContracts": [{"id": "deck-strategy"}]},
+      {"id": "page-map", "title": "Page map", "kind": "planning", "purpose": "Map the approved story to page-level roles.", "dependsOn": ["strategy"], "capabilityRequirements": ["deck-script"], "acceptanceIds": [], "inputContracts": [{"id": "deck-strategy"}], "outputContracts": [{"id": "page-map"}]},
+      {"id": "sample", "title": "Sample pages", "kind": "sample", "purpose": "Produce representative pages for user approval.", "dependsOn": ["page-map"], "capabilityRequirements": ["deck-script"], "acceptanceIds": [], "inputContracts": [{"id": "page-map"}], "outputContracts": [{"id": "sample-pages"}]},
+      {"id": "user-approval", "title": "User approval", "kind": "user-approval", "purpose": "Obtain approval before full production.", "dependsOn": ["sample"], "acceptanceIds": [], "inputContracts": [{"id": "sample-pages"}], "userApprovalRequired": true, "workerRequired": false},
+      {"id": "production", "title": "Deck production", "kind": "implementation", "purpose": "Produce the approved client-ready deck.", "dependsOn": ["user-approval"], "capabilityRequirements": ["deck-script"], "acceptanceIds": [], "writeBoundary": "approved-target", "writeTargets": "$approvedTargets", "outputContracts": [{"id": "produced-deck"}]},
+      {"id": "review", "title": "Deck review", "kind": "review", "purpose": "Verify the produced deck against acceptance criteria.", "dependsOn": ["production"], "capabilityRequirements": ["deck-verifier"], "acceptanceIds": ["story-coherent", "page-roles-defined"], "writeBoundary": "review-only", "inputContracts": [{"id": "produced-deck"}]}
+    ],
+    "edges": [{"from": "strategy", "to": "page-map"}, {"from": "page-map", "to": "sample"}, {"from": "sample", "to": "user-approval"}, {"from": "user-approval", "to": "production"}, {"from": "production", "to": "review"}]
+  },
+  "capabilityRequirements": ["deck-strategy", "deck-script"],
+  "acceptanceCases": [
+    {"id": "story-coherent", "description": "The deck narrative supports the approved decision.", "version": "1.0", "method": "business", "procedure": {"externalVerifier": "deck-verifier"}, "expected": {"approved": true}, "evidenceSchema": {"minItems": 1}, "minimumAttestation": "independent_reviewed"},
+    {"id": "page-roles-defined", "description": "Every page has an explicit role.", "version": "1.0", "method": "structural", "procedure": {}, "expected": {"keys": ["pageRoles"]}, "evidenceSchema": {"minItems": 1}, "minimumAttestation": "tool_verified"}
+  ],
+  "verifierRequirements": ["deck-verifier"],
+  "goldenFixtures": ["fixtures/sample-client-deck.json"],
+  "fingerprint": "fd08bba615ff264599b2cb317862986b17eb3c874c09c74c74f063fc03fba185"
+}

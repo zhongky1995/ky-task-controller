@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ScenarioPack v1",
+  "type": "object",
+  "required": ["id", "version", "schemaVersion", "fingerprint", "compatibility", "match", "blueprintDefaults", "graphTemplate", "capabilityRequirements", "acceptanceCases", "verifierRequirements", "goldenFixtures"]
+}

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://task-controller.local/contracts/operation-receipt.schema.json",
+  "title": "OperationReceipt v1",
+  "type": "object",
+  "required": [
+    "receiptVersion", "receiptId", "permitId", "targetId", "targetLocator", "action",
+    "payloadFingerprint", "providerResultDigest", "readbackDigest", "beforeVersion",
+    "afterVersion", "artifactFingerprint", "idempotencyKey", "adapterFingerprint",
+    "startedAt", "completedAt", "status"
+  ],
+  "properties": {
+    "receiptVersion": {"const": "1.0"},
+    "receiptId": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "permitId": {"type": "string", "minLength": 1},
+    "targetId": {"type": "string", "minLength": 1},
+    "targetLocator": {"type": "string", "minLength": 1},
+    "action": {"type": "string", "minLength": 1},
+    "payloadFingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "providerResultDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "readbackDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "beforeVersion": {},
+    "afterVersion": {},
+    "artifactFingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "idempotencyKey": {"type": "string", "minLength": 1},
+    "adapterFingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$|^.+$"},
+    "startedAt": {"type": "string", "format": "date-time"},
+    "completedAt": {"type": "string", "format": "date-time"},
+    "status": {"enum": ["consumed", "reconcile_required"]},
+    "reconciled": {"type": "boolean"},
+    "reconcileReason": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": false
+}

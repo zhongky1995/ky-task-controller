@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://task-controller.local/contracts/acceptance-case.schema.json",
+  "title": "AcceptanceCase v1",
+  "type": "object",
+  "required": ["id", "version", "method", "procedure", "expected", "threshold", "evidenceSchema", "appliesTo", "required", "minimumAttestation", "fingerprint"],
+  "properties": {
+    "id": {"type": "string", "minLength": 1},
+    "version": {"type": "string", "minLength": 1},
+    "method": {"type": "string", "minLength": 1},
+    "procedure": {"type": "object"},
+    "expected": {},
+    "threshold": {"type": "number", "minimum": 0, "maximum": 1},
+    "evidenceSchema": {"type": "object"},
+    "appliesTo": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "required": {"type": "boolean"},
+    "minimumAttestation": {"enum": ["self_attested", "tool_verified", "independent_reviewed", "human_approved"]},
+    "fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,6 @@
+interface:
+  display_name: "KY-TASK"
+  short_description: "按 lane / worker 管理复杂任务执行"
+  default_prompt: "用 KY-TASK 建立或读取任务契约，按实际任务拆分 Evidence / Object-model / Product-experience / Implementation / Review lanes 和 worker 会话，记录 checkpoint，并在进入外部写入前确认写入边界。"
+policy:
+  allow_implicit_invocation: true

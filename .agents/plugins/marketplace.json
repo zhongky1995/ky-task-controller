@@ -1,0 +1,20 @@
+{
+  "name": "ky-task-controller",
+  "interface": {
+    "displayName": "KY-TASK Controller"
+  },
+  "plugins": [
+    {
+      "name": "task-controller",
+      "source": {
+        "source": "local",
+        "path": "./plugins/task-controller"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

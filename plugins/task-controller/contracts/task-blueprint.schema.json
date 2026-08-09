@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://task-controller.local/contracts/task-blueprint.schema.json",
+  "title": "TaskBlueprint v1",
+  "type": "object",
+  "required": ["blueprintVersion", "id", "taskType", "interactionMode", "outcome", "deliverable", "sources", "intentAnchors", "decisions", "changePolicy", "acceptanceCases", "approvals", "standards", "assumptions", "nonGoals", "capacity", "changeTriggers"],
+  "properties": {
+    "blueprintVersion": {"type": "string", "minLength": 1},
+    "id": {"type": "string", "minLength": 1},
+    "taskType": {"type": "string", "minLength": 1},
+    "interactionMode": {"enum": ["execute", "discuss_only", "plan_only"]},
+    "outcome": {"type": "object", "required": ["businessGoal", "supportedDecision"], "properties": {"businessGoal": {"type": "string", "minLength": 1}, "supportedDecision": {"type": "string", "minLength": 1}}},
+    "deliverable": {"type": "object", "required": ["id", "kind", "target", "format", "audience", "useMode", "standalone", "artifactClass"], "properties": {"id": {"type": "string"}, "kind": {"type": "string"}, "target": {"type": "string"}, "format": {"type": "string"}, "audience": {"oneOf": [{"type": "string"}, {"type": "array", "minItems": 1, "items": {"type": "string"}}]}, "useMode": {"type": "string"}, "standalone": {"type": "boolean"}, "artifactClass": {"type": "string"}, "units": {"type": "array", "items": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}}}}, "deliveryPackage": {"type": "object"}}},
+    "sources": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/identified"}},
+    "intentAnchors": {"type": "array", "items": {"$ref": "#/$defs/identified"}},
+    "decisions": {"type": "array", "items": {"type": "object", "required": ["id", "statement"], "properties": {"id": {"type": "string"}, "statement": {"type": "string"}, "status": {"type": "string"}}}},
+    "changePolicy": {"type": "object", "required": ["preserve", "allowed", "forbidden"], "properties": {"preserve": {"type": "array", "items": {"$ref": "#/$defs/identified"}}, "allowed": {"type": "array", "items": {"$ref": "#/$defs/identified"}}, "forbidden": {"type": "array", "items": {"$ref": "#/$defs/identified"}}}},
+    "acceptanceCases": {"type": "array", "items": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}, "description": {"type": "string"}, "statement": {"type": "string"}}}},
+    "approvals": {"type": "object", "properties": {"sampleGate": {"type": "object"}, "userApprovalGate": {"type": "object"}}},
+    "writePolicy": {"type": "object"},
+    "standards": {}, "assumptions": {}, "nonGoals": {}, "capacity": {}, "changeTriggers": {}
+  },
+  "$defs": {"identified": {"oneOf": [{"type": "string", "minLength": 1}, {"type": "object", "required": ["id"], "properties": {"id": {"type": "string", "minLength": 1}}}]}}
+}

@@ -1,0 +1,14 @@
+{
+  "policyVersion": "1.1",
+  "runtimeSelectionPolicy": "native_session_required",
+  "nativeThreadUserApproved": false,
+  "maxParallelWorkers": 4,
+  "projectAffinityPolicy": "inherit_or_resolve_required",
+  "projectlessUserApproved": false,
+  "approvalRecord": {
+    "scope": "KY-TASK distributed worker lanes",
+    "source": "No standing approval in the open-source distribution",
+    "recordedAt": "",
+    "statement": "Obtain explicit user approval for the current task before creating visible native Codex Session workers. Do not silently substitute managed subagents or projectless Sessions."
+  }
+}

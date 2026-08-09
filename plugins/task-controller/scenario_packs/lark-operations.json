@@ -1,0 +1,28 @@
+{
+  "id": "lark-operations",
+  "version": "1.0.0",
+  "schemaVersion": "1.0",
+  "compatibility": {"taskBlueprint": "^1", "solutionGraph": "^1", "registry": "^1"},
+  "match": {"domains": ["lark-operations"], "artifactClasses": ["dashboard", "lark-base"], "exclusions": ["local-only"]},
+  "blueprintDefaults": {"readbackRequired": true, "target": "lark"},
+  "graphTemplate": {
+    "nodes": [
+      {"id": "audit", "title": "Operations audit", "kind": "audit", "purpose": "Audit the current operational workflow and data.", "capabilityRequirements": ["lark-doc-operations"], "acceptanceIds": [], "outputContracts": [{"id": "audit-findings"}]},
+      {"id": "model", "title": "Data model", "kind": "modeling", "purpose": "Model fields, views, and workflow data.", "dependsOn": ["audit"], "capabilityRequirements": ["lark-base-operations"], "acceptanceIds": [], "inputContracts": [{"id": "audit-findings"}], "outputContracts": [{"id": "lark-model"}]},
+      {"id": "experience", "title": "User experience", "kind": "design", "purpose": "Define operator and stakeholder experiences.", "dependsOn": ["audit"], "capabilityRequirements": ["lark-doc-operations"], "acceptanceIds": [], "inputContracts": [{"id": "audit-findings"}], "outputContracts": [{"id": "experience-design"}]},
+      {"id": "sample-approval", "title": "Sample approval", "kind": "user-approval", "purpose": "Approve the modeled sample before implementation.", "dependsOn": ["model", "experience"], "acceptanceIds": [], "inputContracts": [{"id": "lark-model"}, {"id": "experience-design"}], "userApprovalRequired": true, "workerRequired": false},
+      {"id": "implementation", "title": "Lark implementation", "kind": "implementation", "purpose": "Configure the approved Lark operations target.", "dependsOn": ["sample-approval"], "capabilityRequirements": ["lark-base-operations"], "acceptanceIds": [], "writeBoundary": "approved-target", "writeTargets": "$approvedTargets", "outputContracts": [{"id": "implemented-target"}]},
+      {"id": "readback", "title": "Target readback", "kind": "readback", "purpose": "Read back the configured target and verify operation.", "dependsOn": ["implementation"], "capabilityRequirements": ["lark-base-operations"], "acceptanceIds": ["target-readback"], "inputContracts": [{"id": "implemented-target"}], "outputContracts": [{"id": "readback-evidence"}]},
+      {"id": "review", "title": "Operations review", "kind": "review", "purpose": "Independently review readback evidence.", "dependsOn": ["readback"], "capabilityRequirements": ["lark-verifier"], "acceptanceIds": ["business-path-works"], "writeBoundary": "review-only", "inputContracts": [{"id": "readback-evidence"}]}
+    ],
+    "edges": [{"from": "audit", "to": "model"}, {"from": "audit", "to": "experience"}, {"from": "model", "to": "sample-approval"}, {"from": "experience", "to": "sample-approval"}, {"from": "sample-approval", "to": "implementation"}, {"from": "implementation", "to": "readback"}, {"from": "readback", "to": "review"}]
+  },
+  "capabilityRequirements": ["lark-base-operations", "lark-doc-operations"],
+  "acceptanceCases": [
+    {"id": "business-path-works", "description": "The approved operational path works for the intended user.", "version": "1.0", "method": "business", "procedure": {"externalVerifier": "lark-verifier"}, "expected": {"approved": true}, "evidenceSchema": {"minItems": 1}, "minimumAttestation": "independent_reviewed"},
+    {"id": "target-readback", "description": "The configured target matches the approved operation.", "version": "1.0", "method": "readback", "procedure": {"mode": "contains"}, "expected": {"configured": true}, "evidenceSchema": {"minItems": 1}, "minimumAttestation": "tool_verified"}
+  ],
+  "verifierRequirements": ["lark-verifier"],
+  "goldenFixtures": ["fixtures/lark-cockpit.json"],
+  "fingerprint": "816be8666dfc20244c62d0a809472ef1de031b6aba1fac80d6c7c18acde8a194"
+}

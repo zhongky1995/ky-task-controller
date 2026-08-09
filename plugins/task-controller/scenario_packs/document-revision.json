@@ -1,0 +1,24 @@
+{
+  "id": "document-revision",
+  "version": "1.0.0",
+  "schemaVersion": "1.0",
+  "compatibility": {"taskBlueprint": "^1", "solutionGraph": "^1", "registry": "^1"},
+  "match": {"domains": ["document-revision"], "artifactClasses": ["document", "report"], "exclusions": ["new-deck"]},
+  "blueprintDefaults": {"preserveMap": true, "renderReadback": true},
+  "graphTemplate": {
+    "nodes": [
+      {"id": "diagnose", "title": "Revision diagnosis", "kind": "analysis", "purpose": "Diagnose changes while preserving the source map.", "capabilityRequirements": ["document-revision"], "acceptanceIds": [], "outputContracts": [{"id": "revision-plan"}]},
+      {"id": "revise", "title": "Controlled revision", "kind": "implementation", "purpose": "Apply the controlled document revision.", "dependsOn": ["diagnose"], "capabilityRequirements": ["document-revision"], "acceptanceIds": [], "writeBoundary": "approved-target", "writeTargets": "$approvedTargets", "inputContracts": [{"id": "revision-plan"}], "outputContracts": [{"id": "revised-document"}]},
+      {"id": "verify", "title": "Revision verification", "kind": "review", "purpose": "Verify preservation and rendered readback.", "dependsOn": ["revise"], "capabilityRequirements": ["document-verifier"], "acceptanceIds": ["preservation-map", "audience-fit"], "writeBoundary": "review-only", "inputContracts": [{"id": "revised-document"}]}
+    ],
+    "edges": [{"from": "diagnose", "to": "revise"}, {"from": "revise", "to": "verify"}]
+  },
+  "capabilityRequirements": ["document-revision"],
+  "acceptanceCases": [
+    {"id": "preservation-map", "description": "Required source content is preserved and mapped.", "version": "1.0", "method": "readback", "procedure": {"mode": "contains"}, "expected": {"preserved": true}, "evidenceSchema": {"minItems": 1}, "minimumAttestation": "tool_verified"},
+    {"id": "audience-fit", "description": "The revision is fit for its target audience.", "version": "1.0", "method": "semantic", "procedure": {"externalVerifier": "document-verifier"}, "expected": {"approved": true}, "evidenceSchema": {"minItems": 1}, "minimumAttestation": "independent_reviewed"}
+  ],
+  "verifierRequirements": ["document-verifier"],
+  "goldenFixtures": ["fixtures/document-revision.json"],
+  "fingerprint": "82d8c9b0063704a0f6ca2b0fb54b818172d6caac663341164540b82ba3ce1adb"
+}

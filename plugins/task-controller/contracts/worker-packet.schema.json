@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://task-controller.local/contracts/worker-packet.schema.json",
+  "title": "WorkerPacket v1",
+  "type": "object",
+  "required": ["packetVersion", "packetId", "packetDigest", "blueprintDigest", "contractSpecDigest", "graphDigest", "nodeId", "laneName", "title", "purpose", "taskType", "interactionMode", "capabilityBindings", "dependsOn", "inputArtifacts", "outputContract", "unitSpecs", "sourceSpecs", "decisionSpecs", "standards", "constraints", "acceptanceCases", "writePolicySlice", "userApprovalRequired", "callbackContract"],
+  "properties": {
+    "packetVersion": {"const": "1.0"},
+    "packetId": {"type": "string", "minLength": 1},
+    "packetDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "blueprintDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "contractSpecDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "graphDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "nodeId": {"type": "string", "minLength": 1}, "laneName": {"type": "string", "minLength": 1},
+    "title": {"type": "string", "minLength": 1}, "purpose": {"type": "string", "minLength": 1},
+    "taskType": {"type": "string", "minLength": 1}, "interactionMode": {"enum": ["execute", "discuss_only", "plan_only"]},
+    "capabilityBindings": {"type": "array", "items": {"$ref": "#/$defs/binding"}},
+    "dependsOn": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "inputArtifacts": {"type": "array"},
+    "outputContract": {"$ref": "#/$defs/outputContract"},
+    "unitSpecs": {"type": "array", "items": {"$ref": "#/$defs/identified"}},
+    "sourceSpecs": {"type": "array", "items": {"$ref": "#/$defs/identified"}},
+    "decisionSpecs": {"type": "array", "items": {"$ref": "#/$defs/identified"}},
+    "standards": {},
+    "constraints": {"type": "object", "required": ["preserve", "allowedChanges", "forbidden", "nonGoals", "assumptions", "capacity"]},
+    "acceptanceCases": {"type": "array", "items": {"$ref": "#/$defs/identified"}},
+    "writePolicySlice": {"$ref": "#/$defs/writePolicySlice"},
+    "userApprovalRequired": {"type": "boolean"},
+    "callbackContract": {"type": "object", "required": ["packetDigest", "graphDigest", "blueprintDigest", "outputArtifactContract"], "properties": {"packetDigest": {"type": "string"}, "graphDigest": {"type": "string"}, "blueprintDigest": {"type": "string"}, "outputArtifactContract": {"$ref": "#/$defs/outputContract"}}, "additionalProperties": false}
+  },
+  "$defs": {
+    "identified": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string", "minLength": 1}}, "additionalProperties": true},
+    "binding": {"type": "object", "required": ["capabilityId", "role"], "properties": {"capabilityId": {"type": "string", "minLength": 1}, "role": {"type": "string", "minLength": 1}}, "additionalProperties": false},
+    "outputContract": {"type": "object", "required": ["artifacts", "schema"], "properties": {"artifacts": {"type": "array"}, "schema": {"type": "object", "minProperties": 1}}, "additionalProperties": false},
+    "writePolicySlice": {"type": "object", "required": ["writeBoundary", "targets", "allowedActions"], "properties": {"writeBoundary": {"enum": ["none", "approved-target", "review-only"]}, "targets": {"type": "array"}, "allowedActions": {"type": "array", "items": {"type": "string"}}}, "additionalProperties": true}
+  },
+  "additionalProperties": false
+}
