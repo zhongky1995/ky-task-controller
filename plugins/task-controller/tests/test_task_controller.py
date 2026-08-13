@@ -967,6 +967,9 @@ class WorkerGateTests(ControllerTestCase):
         self.assertEqual("project-main", worker["projectId"])
         self.assertEqual("worktree", worker["projectEnvironment"])
         self.assertIn("projectId: project-main", worker["prompt"])
+        self.assertEqual("1.0", worker["runtimeRegistryVersion"])
+        self.assertEqual("1.0", worker["runtimeProfileVersion"])
+        self.assertEqual(64, len(worker["runtimeProfileFingerprint"]))
 
     def test_native_thread_registration_requires_explicit_user_approval(self) -> None:
         self.init_state(
@@ -1009,6 +1012,23 @@ class WorkerGateTests(ControllerTestCase):
             "worker-1", "one", "request-1", "agent-1", ok=False
         )
         self.assertIn("persistent and requires native_thread_lane", rejected.stderr)
+
+    def test_runtime_profile_rejects_unsupported_project_scope(self) -> None:
+        self.init_state([{"name": "one"}])
+        rejected = self.register_managed(
+            "worker-1",
+            "one",
+            "request-1",
+            "agent-1",
+            "--project-target-type",
+            "project",
+            "--project-id",
+            "project-main",
+            "--project-environment",
+            "local",
+            ok=False,
+        )
+        self.assertIn("not supported by the managed_agent_worker runtime profile", rejected.stderr)
 
 
 class IndependentReviewTests(ControllerTestCase):
@@ -1698,7 +1718,7 @@ class BusinessDeliveryContractTests(ControllerTestCase):
     def test_business_delivery_presets_cover_required_scenarios(self) -> None:
         preset = ROOT / "skills" / "task-controller" / "references" / "business-delivery-presets.md"
         content = preset.read_text(encoding="utf-8")
-        for heading in ("逐P对客稿", "证据型分析", "飞书 Base / 驾驶舱 / Wiki", "现有文档修订"):
+        for heading in ("逐P对客稿", "客户报价", "证据型分析", "飞书 Base / 驾驶舱 / Wiki", "现有文档修订"):
             self.assertIn(heading, content)
 
 
@@ -1727,6 +1747,8 @@ class McpSchemaTests(unittest.TestCase):
             "task_controller_register_worker",
             "task_controller_update_worker",
             "task_controller_list_workers",
+            "task_controller_classify_feedback",
+            "task_controller_ingest_feedback",
             "task_controller_record_correction",
             "task_controller_record_approval",
             "task_controller_record_callback",
@@ -1736,6 +1758,13 @@ class McpSchemaTests(unittest.TestCase):
         }
         self.assertTrue(expected.issubset(tools))
         register = tools["task_controller_register_worker"]["inputSchema"]["properties"]
+        registry = json.loads(
+            (ROOT / "config" / "worker-runtime-profiles.json").read_text(encoding="utf-8")
+        )
+        configured_runtimes = {
+            profile["runtimeId"] for profile in registry["profiles"] if profile["independent"]
+        }
+        self.assertTrue(configured_runtimes.issubset(set(register["laneRuntime"]["enum"])))
         self.assertIn("managed_agent_worker", register["laneRuntime"]["enum"])
         self.assertIn("managed_result_collected", register["callbackModeExpected"]["enum"])
         register_schema = tools["task_controller_register_worker"]["inputSchema"]
@@ -1796,7 +1825,7 @@ class McpSchemaTests(unittest.TestCase):
         self.assertIn("required", canonical_item["oneOf"][1]["properties"])
         self.assertIn("priority", canonical_item["oneOf"][1]["properties"])
         contract_props = init_props["contractSpec"]["properties"]
-        for field in ("interactionMode", "decisionLedger", "writePolicy", "userApprovalGate"):
+        for field in ("interactionMode", "decisionLedger", "decisionGovernance", "writePolicy", "userApprovalGate"):
             self.assertIn(field, contract_props)
         deliverable_props = contract_props["deliverable"]["properties"]
         for field in ("audience", "useMode", "standalone", "artifactClass", "units", "deliveryPackage"):
@@ -1808,6 +1837,10 @@ class McpSchemaTests(unittest.TestCase):
             "statePath", "eventId", "summary", "category", "requirementIds", "recommendedInvalidFromLane",
         ):
             self.assertIn(field, correction["required"])
+        ingest_feedback = tools["task_controller_ingest_feedback"]["inputSchema"]
+        self.assertTrue({"statePath", "feedback"}.issubset(ingest_feedback["required"]))
+        classify_feedback = tools["task_controller_classify_feedback"]["inputSchema"]
+        self.assertEqual(["feedback"], classify_feedback["required"])
         revise = tools["task_controller_revise_contract"]["inputSchema"]["properties"]
         self.assertIn("contractSpec", revise)
         self.assertIn("consumeCorrectionEventIds", revise)

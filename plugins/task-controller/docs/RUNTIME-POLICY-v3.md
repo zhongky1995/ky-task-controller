@@ -69,6 +69,20 @@ before waiting. As workers finish, it records callbacks and refills open slots.
 Missing `dependsOn` preserves the old ordered-lane chain for legacy states.
 New plans must not rely on list order as an implicit dependency graph.
 
+## Capability-based runtime selection
+
+Python state enforcement and the MCP schema now share
+`config/worker-runtime-profiles.json` as the checked-in source of truth for
+independent worker runtimes. The state machine asks whether a profile is
+independent, user-visible, project-capable, persistent-capable, approved, and
+callback-compatible instead of selecting by runtime-name branches.
+
+This abstraction does not loosen the policy above. Under
+`native_session_required`, `managed_agent_worker` fails the user-visible and
+project-scope requirements, so it cannot be selected or registered. See
+`WORKER-RUNTIME-PROFILES-v1.md` for the profile contract and compatibility
+boundary.
+
 ## Write safety
 
 - Independent read, research, analysis, and design lanes may run concurrently.

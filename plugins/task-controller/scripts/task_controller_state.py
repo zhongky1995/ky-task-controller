@@ -24,6 +24,12 @@ if str(PLUGIN_ROOT) not in sys.path:
 
 from control_plane.blueprint import compile_blueprint, validate_blueprint
 from control_plane.capability_router import shadow_route
+from control_plane.decision_governance import (
+    AUTHORITIES,
+    apply_scenario_policy,
+    classify_feedback,
+    derive_decision_governance,
+)
 from control_plane.solution_graph import build_solution_graph, projection_to_lane_definitions, validate_solution_graph
 from control_plane.worker_packet import compile_worker_packets, render_worker_prompt, validate_worker_packet
 from registry.loader import load_registry
@@ -37,6 +43,13 @@ from runtime.operation_dispatcher import (
     revoke_permit,
     validate_permit,
 )
+from runtime.worker_runtime import (
+    RUNTIME_REGISTRY,
+    approved_runtime_ids,
+    profile_satisfies,
+    requirement_for_lane,
+    select_runtime,
+)
 from verification.acceptance import (
     ATTESTATION_STRENGTH,
     aggregate_verification,
@@ -47,7 +60,7 @@ from verification.acceptance import (
 
 SCHEMA_VERSION = 2
 DEFAULT_LANES = ["evidence", "object-model", "product-experience", "implementation", "review"]
-TRUE_WORKER_RUNTIMES = {"native_thread_lane", "managed_agent_worker"}
+TRUE_WORKER_RUNTIMES = RUNTIME_REGISTRY.independent_runtime_ids()
 LANE_RUNTIMES = TRUE_WORKER_RUNTIMES | {"single_thread_section", "thread_create_unavailable"}
 SPLIT_REQUIREMENTS = {"mandatory", "recommended", "none"}
 EXECUTION_MODES = {"distributed", "multi_session", "sequential_lanes", "direct"}
@@ -69,6 +82,7 @@ MAX_PARALLEL_WORKERS = 8
 ENFORCEMENT_MODES = {"workflow_only", "semantic_strict"}
 INTERACTION_MODES = {"discuss_only", "plan_only", "execute"}
 WRITE_BOUNDARIES = {"read-only", "draft-file", "approved-target", "review-only"}
+DECISION_REVIEW_KINDS = {"decision-review"}
 ACTIVE_WORKER_STATUSES = {"pending", "running", "done", "needs-work", "blocked"}
 PASS_CALLBACK_MODES = {
     "active_message_required": {"active_message"},
@@ -88,6 +102,7 @@ MUTATING_COMMANDS = {
     "add-note",
     "register-worker",
     "update-worker",
+    "ingest-feedback",
     "record-correction",
     "record-approval",
     "record-callback",
@@ -387,6 +402,82 @@ def validate_contract_spec(raw: Any, lanes: list[dict[str, Any]]) -> dict[str, A
         decision_ledger.append(decision)
     spec["decisionLedger"] = decision_ledger
 
+    derived_governance = derive_decision_governance(
+        {
+            "taskType": str(spec.get("taskType", "")),
+            "deliverable": deliverable,
+            "domains": spec.get("domains", []),
+            "changePolicy": {
+                "preserve": spec["preserve"],
+                "allowed": spec["allowedChanges"],
+                "forbidden": spec["forbidden"],
+            },
+            "approvals": {"userApprovalGate": spec.get("userApprovalGate", {})},
+        },
+        lanes,
+    )
+    raw_governance = spec.get("decisionGovernance", derived_governance)
+    if not isinstance(raw_governance, dict):
+        fail("contractSpec.decisionGovernance must be an object when provided.")
+    decision_governance = dict(raw_governance)
+    decision_governance["policyVersion"] = require_nonempty(
+        decision_governance.get("policyVersion"), "contractSpec.decisionGovernance.policyVersion"
+    )
+    if decision_governance.get("riskLevel") not in {"low", "high"}:
+        fail("contractSpec.decisionGovernance.riskLevel must be low or high.")
+    if not isinstance(decision_governance.get("confirmationRequired"), bool):
+        fail("contractSpec.decisionGovernance.confirmationRequired must be a boolean.")
+    raw_items = decision_governance.get("items")
+    if not isinstance(raw_items, list):
+        fail("contractSpec.decisionGovernance.items must be an array.")
+    governance_items: list[dict[str, Any]] = []
+    for raw_item in raw_items:
+        if not isinstance(raw_item, dict):
+            fail("contractSpec.decisionGovernance items must be objects.")
+        item = dict(raw_item)
+        item["id"] = require_nonempty(item.get("id"), "contractSpec.decisionGovernance item id")
+        item["category"] = require_nonempty(
+            item.get("category"), "contractSpec.decisionGovernance item category"
+        )
+        item["authority"] = require_nonempty(
+            item.get("authority"), "contractSpec.decisionGovernance item authority"
+        )
+        if item["authority"] not in AUTHORITIES:
+            fail("contractSpec.decisionGovernance item authority is invalid.")
+        item["source"] = require_nonempty(
+            item.get("source"), "contractSpec.decisionGovernance item source"
+        )
+        governance_items.append(item)
+    if len({item["id"] for item in governance_items}) != len(governance_items):
+        fail("contractSpec.decisionGovernance item IDs must be unique.")
+    governed_by_id = {item["id"]: item for item in governance_items}
+    derived_by_id = {item["id"]: item for item in derived_governance["items"]}
+    if set(governed_by_id) != set(derived_by_id):
+        fail("contractSpec.decisionGovernance items must cover every change-policy item exactly once.")
+    for item_id, derived_item in derived_by_id.items():
+        actual = governed_by_id[item_id]
+        if derived_item["authority"] in {"locked", "propose_then_confirm"} and actual["authority"] != derived_item["authority"]:
+            fail(
+                "contractSpec.decisionGovernance cannot weaken derived authority for item: "
+                + item_id
+            )
+    confirmation_ids = sorted(
+        item["id"] for item in governance_items if item["authority"] == "propose_then_confirm"
+    )
+    declared_confirmation_ids = decision_governance.get("confirmationItemIds", confirmation_ids)
+    if not isinstance(declared_confirmation_ids, list) or sorted(declared_confirmation_ids) != confirmation_ids:
+        fail("contractSpec.decisionGovernance.confirmationItemIds must match propose_then_confirm items.")
+    if decision_governance["confirmationRequired"] != bool(confirmation_ids):
+        fail("contractSpec.decisionGovernance.confirmationRequired does not match its authority items.")
+    decision_governance["items"] = governance_items
+    decision_governance["confirmationItemIds"] = confirmation_ids
+    decision_governance["triggers"] = normalize_string_list(
+        decision_governance.get("triggers", []),
+        "contractSpec.decisionGovernance.triggers",
+        allow_empty=True,
+    )
+    spec["decisionGovernance"] = decision_governance
+
     raw_write_policy = spec.get("writePolicy")
     approved_target_lanes = [lane for lane in lanes if lane.get("writeBoundary") == "approved-target"]
     if raw_write_policy is not None:
@@ -479,6 +570,21 @@ def validate_contract_spec(raw: Any, lanes: list[dict[str, Any]]) -> dict[str, A
         user_gate.update({"blocks": blocks, "artifactId": artifact_id})
     spec["userApprovalGate"] = user_gate
     return spec
+
+
+def require_decision_confirmation_gate(contract_spec: dict[str, Any]) -> None:
+    governance = contract_spec.get("decisionGovernance", {})
+    gate = contract_spec.get("userApprovalGate", {})
+    if (
+        contract_spec.get("interactionMode") == "execute"
+        and isinstance(governance, dict)
+        and governance.get("confirmationRequired") is True
+        and not (isinstance(gate, dict) and gate.get("required") is True)
+    ):
+        fail(
+            "decision_confirmation_gate_required: propose_then_confirm commercial decisions "
+            "require a fingerprint-bound userApprovalGate before execution."
+        )
 
 
 def compute_contract_digest(contract_spec: dict[str, Any], revision: int) -> str:
@@ -580,6 +686,7 @@ def plan_blueprint_data(
     lane_projection: dict[str, Any] = {"laneDefinitions": [], "mapping": []}
     packets: list[dict[str, Any]] = []
     compiled: dict[str, Any] | None = None
+    policy_applications: list[dict[str, Any]] = []
     scenario = routing.get("scenarioPack")
     if not isinstance(scenario, dict) or not scenario.get("id"):
         blockers.append({"stage": "routing", "reason": "No scenario pack matched the TaskBlueprint."})
@@ -589,6 +696,11 @@ def plan_blueprint_data(
             scenario.get("version") or None,
             task_blueprint_version=blueprint.get("blueprintVersion"),
         ).data
+        try:
+            blueprint, policy_applications = apply_scenario_policy(blueprint, pack)
+            blueprint = validate_blueprint(blueprint)
+        except ValueError as error:
+            blockers.append({"stage": "policy", "reason": str(error)})
         try:
             solution_graph = build_solution_graph(blueprint, routing, pack)
         except ValueError:
@@ -634,6 +746,7 @@ def plan_blueprint_data(
         "solutionGraph": solution_graph,
         "laneProjection": lane_projection,
         "workerPackets": packets,
+        "policyApplications": policy_applications,
         "planDigest": "",
         "planExecutable": plan_executable,
         "blockers": blockers,
@@ -886,6 +999,13 @@ def user_approval_gate_blockers(state: dict[str, Any], target_lane: str) -> list
         return []
     gate = state["contractSpec"].get("userApprovalGate", {})
     if not gate.get("required") or target_lane not in gate.get("blocks", []):
+        return []
+    return user_approval_record_blockers(state)
+
+
+def user_approval_record_blockers(state: dict[str, Any]) -> list[str]:
+    gate = state["contractSpec"].get("userApprovalGate", {})
+    if not gate.get("required"):
         return []
     artifact_id = gate["artifactId"]
     artifact = current_manifest_artifacts(state).get(artifact_id)
@@ -1151,20 +1271,20 @@ def validate_structured_result_provenance(
     if result["evaluator"]["capabilityId"] not in capability_ids:
         fail("semantic/business VerificationResult evaluator capability is not bound by the registered WorkerPacket.")
     lane = find_lane(state, worker.get("lane", ""))
-    if lane.get("kind") != "review":
-        fail("semantic/business VerificationResult requires a review lane worker.")
+    if lane.get("kind") != "review" and lane.get("kind") not in DECISION_REVIEW_KINDS:
+        fail("semantic/business VerificationResult requires a review or decision-review lane worker.")
     if ATTESTATION_STRENGTH[result["attestationType"]] < ATTESTATION_STRENGTH["independent_reviewed"]:
         fail("semantic/business VerificationResult requires independent_reviewed or human_approved attestation.")
-    writers = approved_target_writers_before_lane(state, lane["name"])
+    writers = review_subject_workers(state, lane["name"])
     writer_ids = {item.get("workerId") for item in writers}
     reviewed_ids = set(result.get("reviewedWorkerIds", []))
     missing = sorted(writer_id for writer_id in writer_ids - reviewed_ids if isinstance(writer_id, str))
     if missing:
-        fail("semantic/business VerificationResult.reviewedWorkerIds must cover preceding current approved-target writers: " + ", ".join(missing))
+        fail("semantic/business VerificationResult.reviewedWorkerIds must cover the current review subjects: " + ", ".join(missing))
     writer_runtimes = {item.get("runtimeHandle") for item in writers}
     if worker.get("workerId") in writer_ids or worker.get("runtimeHandle") in writer_runtimes:
-        fail("semantic/business VerificationResult reviewer must be independent from preceding approved-target writers.")
-    review_items = {
+        fail("semantic/business VerificationResult reviewer must be independent from its review subjects.")
+    review_items_by_receipt = {
         item.get("operationReceiptId"): item
         for item in artifact_manifest
         if isinstance(item, dict) and item.get("operationReceiptId")
@@ -1178,11 +1298,20 @@ def validate_structured_result_provenance(
         if not isinstance(writer_manifest, list) or not writer_manifest:
             fail("semantic/business review requires each covered writer to have a current artifactManifest.")
         for writer_item in writer_manifest:
-            if not isinstance(writer_item, dict) or not writer_item.get("operationReceiptId"):
+            if not isinstance(writer_item, dict):
                 continue
-            reviewed_item = review_items.get(writer_item["operationReceiptId"])
+            receipt_id = writer_item.get("operationReceiptId")
+            reviewed_item = review_items_by_receipt.get(receipt_id) if receipt_id else next(
+                (
+                    item for item in artifact_manifest
+                    if isinstance(item, dict)
+                    and item.get("id") == writer_item.get("id")
+                    and item.get("artifactFingerprint") == writer_item.get("artifactFingerprint")
+                ),
+                None,
+            )
             if reviewed_item is None:
-                fail("semantic/business review artifactManifest must include every covered writer receipt artifact.")
+                fail("semantic/business review artifactManifest must include every review-subject artifact.")
             if any(reviewed_item.get(field) != writer_item.get(field) for field in identity_fields):
                 fail("semantic/business review artifactManifest does not match the covered writer artifact identity.")
 
@@ -1228,7 +1357,7 @@ def structured_verification_summary(
 ) -> dict[str, Any]:
     writers = [
         {"workerId": item.get("workerId", ""), "runtimeHandle": item.get("runtimeHandle", "")}
-        for item in approved_target_writers_before_lane(state, worker["lane"])
+        for item in review_subject_workers(state, worker["lane"])
     ]
     try:
         return aggregate_verification(
@@ -1408,8 +1537,12 @@ def make_lane(
     preference = runtime_preference.strip() if isinstance(runtime_preference, str) else ""
     if preference not in RUNTIME_PREFERENCES:
         fail(f"Unsupported runtimePreference: {preference}")
-    if lifecycle == "persistent" and preference == "managed_agent_worker":
-        fail("persistent workerLifecycle cannot prefer managed_agent_worker.")
+    preferred_profile = RUNTIME_REGISTRY.get(preference)
+    if lifecycle == "persistent" and preferred_profile and not preferred_profile.supports_persistent:
+        fail(
+            f"persistent workerLifecycle cannot prefer {preference}: its runtime "
+            "profile does not support persistent workers."
+        )
     lane = {
         "name": lane_name,
         "kind": lane_kind,
@@ -1455,29 +1588,15 @@ def recommended_runtime(
     lane: dict[str, Any], eligible: list[str], *, native_approved: bool,
     selection_policy: str = "lane_lifecycle",
 ) -> str:
-    preference = lane.get("runtimePreference", "auto")
-    lifecycle = lane.get("workerLifecycle", "ephemeral")
-    if preference == "managed_agent_worker":
-        if selection_policy == "native_session_required":
-            return ""
-        return "managed_agent_worker" if "managed_agent_worker" in eligible else ""
-    if preference == "native_thread_lane" or lifecycle == "persistent":
-        return (
-            "native_thread_lane"
-            if "native_thread_lane" in eligible and native_approved
-            else ""
-        )
-    if selection_policy == "native_session_required":
-        return (
-            "native_thread_lane"
-            if "native_thread_lane" in eligible and native_approved
-            else ""
-        )
-    if "managed_agent_worker" in eligible:
-        return "managed_agent_worker"
-    if "native_thread_lane" in eligible and native_approved:
-        return "native_thread_lane"
-    return ""
+    approved = approved_runtime_ids(
+        {"nativeThreadUserApproved": native_approved}
+    )
+    return select_runtime(
+        lane,
+        eligible,
+        approved_runtime_ids=approved,
+        selection_policy=selection_policy,
+    )
 
 
 def normalize_lane_definitions(
@@ -1503,7 +1622,9 @@ def normalize_lane_definitions(
                     definition.get("name", ""),
                     revision,
                     kind=definition.get("kind", ""),
-                    worker_required=bool(definition.get("workerRequired", False)),
+                    worker_required=bool(
+                        definition.get("workerRequired", metadata.get("workerRequired", False))
+                    ),
                     write_boundary=definition.get("writeBoundary", ""),
                     worker_lifecycle=definition.get("workerLifecycle", "ephemeral"),
                     context_policy=definition.get("contextPolicy", ""),
@@ -1545,7 +1666,11 @@ def normalize_execution_policy(raw: dict[str, Any], lanes: list[dict[str, Any]])
         fail(f"Unsupported execution mode: {mode}")
     eligible = raw.get("eligibleRuntimes", [])
     if not isinstance(eligible, list) or any(item not in TRUE_WORKER_RUNTIMES for item in eligible):
-        fail("eligibleRuntimes may contain only native_thread_lane and managed_agent_worker.")
+        fail(
+            "eligibleRuntimes may contain only registered independent worker runtimes: "
+            + ", ".join(sorted(TRUE_WORKER_RUNTIMES))
+            + "."
+        )
     eligible = list(dict.fromkeys(eligible))
     downgrade_reason = raw.get("downgradeReason", "")
     if not isinstance(downgrade_reason, str):
@@ -1607,36 +1732,49 @@ def normalize_execution_policy(raw: dict[str, Any], lanes: list[dict[str, Any]])
         fail(f"Unsupported projectResolutionSource: {project_resolution_source}")
     if target_project_id and not project_resolution_source:
         fail("targetProjectId requires a non-empty projectResolutionSource.")
-    native_project_binding_needed = (
+    approved_runtimes = approved_runtime_ids(
+        {"nativeThreadUserApproved": native_approved}
+    )
+    project_scoped_runtime_ids = {
+        profile.runtime_id
+        for profile in RUNTIME_REGISTRY.profiles
+        if profile.runtime_id in eligible
+        and profile.user_visible
+        and profile.supports_scope("project")
+        and (
+            not profile.requires_explicit_approval
+            or profile.runtime_id in approved_runtimes
+        )
+    }
+    project_binding_needed = (
         is_distributed_mode(mode)
-        and "native_thread_lane" in eligible
-        and native_approved
+        and bool(project_scoped_runtime_ids)
         and (
             selection_policy == "native_session_required"
             or any(
                 lane.get("workerLifecycle") == "persistent"
-                or lane.get("runtimePreference") == "native_thread_lane"
+                or lane.get("runtimePreference") in project_scoped_runtime_ids
                 for lane in lanes
             )
         )
     )
     if (
-        native_project_binding_needed
+        project_binding_needed
         and project_affinity_policy == "inherit_or_resolve_required"
         and not target_project_id
     ):
         fail(
             "project_affinity_required: resolve a saved Codex project with list_projects "
-            "and set targetProjectId plus projectResolutionSource before distributed native dispatch."
+            "and set targetProjectId plus projectResolutionSource before distributed Session dispatch."
         )
     if (
-        native_project_binding_needed
+        project_binding_needed
         and project_affinity_policy == "allow_projectless"
         and not target_project_id
         and not projectless_user_approved
     ):
         fail(
-            "Projectless native dispatch requires explicit projectlessUserApproved=true."
+            "Projectless Session dispatch requires explicit projectlessUserApproved=true."
         )
     implementation_lanes = [lane["name"] for lane in lanes if lane["kind"] == "implementation"]
     review_lanes = [lane["name"] for lane in lanes if lane["kind"] == "review"]
@@ -1647,7 +1785,7 @@ def normalize_execution_policy(raw: dict[str, Any], lanes: list[dict[str, Any]])
     if is_distributed_mode(mode) and not eligible:
         fail("distributed execution requires at least one eligible worker runtime.")
     if is_distributed_mode(mode) and not required_lanes:
-        required_lanes = [lane["name"] for lane in lanes]
+        required_lanes = [lane["name"] for lane in lanes if lane.get("workerRequired")]
     if is_distributed_mode(mode):
         required_lanes = list(
             dict.fromkeys(
@@ -1705,14 +1843,15 @@ def normalize_execution_policy(raw: dict[str, Any], lanes: list[dict[str, Any]])
         ):
             if lane["workerLifecycle"] == "persistent":
                 fail(
-                    f"Lane {lane['name']} is persistent and requires an eligible "
-                    "native_thread_lane with nativeThreadUserApproved=true."
+                    f"Lane {lane['name']} is persistent and requires an eligible, "
+                    "approved runtime profile with supportsPersistent=true; the current "
+                    "profile is native_thread_lane with nativeThreadUserApproved=true."
                 )
             if selection_policy == "native_session_required":
                 fail(
-                    f"Lane {lane['name']} requires native_thread_lane under "
-                    "runtimeSelectionPolicy=native_session_required; include that runtime "
-                    "and set nativeThreadUserApproved=true."
+                    f"Lane {lane['name']} requires an approved, user-visible, "
+                    "project-capable runtime under "
+                    "runtimeSelectionPolicy=native_session_required."
                 )
             fail(
                 f"Lane {lane['name']} requires an independent worker, but its "
@@ -1884,6 +2023,30 @@ def approved_target_writers_before_lane(state: dict[str, Any], lane_name: str) -
     ]
 
 
+def review_subject_workers(state: dict[str, Any], lane_name: str) -> list[dict[str, Any]]:
+    """Return the artifacts a review is required to judge.
+
+    Final review keeps its historical approved-target scope.  A pre-production
+    decision review instead covers workers in its direct dependency lanes, so a
+    commercial-model reviewer can be proven independent before any final write.
+    """
+    lane = find_lane(state, lane_name)
+    if lane.get("kind") == "review":
+        return approved_target_writers_before_lane(state, lane_name)
+    if lane.get("kind") not in DECISION_REVIEW_KINDS:
+        return []
+    dependency_lanes = set(lane.get("dependsOn", []))
+    revision = state["contractRevision"]
+    return [
+        worker
+        for worker in state.get("workers", [])
+        if worker_is_current(worker, revision)
+        and worker.get("lane") in dependency_lanes
+        and worker.get("status") == "done"
+        and worker.get("decision") == "pass"
+    ]
+
+
 def review_coverage_blockers(
     state: dict[str, Any], review_lane: str, review_workers: list[dict[str, Any]]
 ) -> list[str]:
@@ -2009,7 +2172,7 @@ def evaluate_gate(
     for lane in worker_scope_lanes:
         lane_workers = [worker for worker in current_workers if worker.get("lane") == lane.get("name")]
         carried = lane.get("carriedForwardAtRevision") == revision
-        if is_semantic_strict(state) and not lane_workers and not carried:
+        if is_semantic_strict(state) and lane.get("workerRequired") and not lane_workers and not carried:
             blockers.append(f"Strict semantic worker callback missing for lane: {lane.get('name')}")
         if lane.get("workerRequired"):
             real_workers = [worker for worker in lane_workers if worker.get("laneRuntime") in TRUE_WORKER_RUNTIMES]
@@ -2199,6 +2362,7 @@ def init(args: argparse.Namespace) -> None:
         else:
             raw_contract_spec = load_json_value(args.contract_spec) if args.contract_spec else None
             contract_spec = validate_contract_spec(raw_contract_spec, lanes)
+        require_decision_confirmation_gate(contract_spec)
         contract_digest = compute_contract_digest(contract_spec, 1)
     elif blueprint_compiled is not None:
         if args.contract_spec:
@@ -2368,6 +2532,10 @@ def complete_lane(args: argparse.Namespace) -> None:
     if args.decision == "pass":
         if not artifact:
             fail("pass requires a non-empty artifact.")
+        if lane.get("kind") in {"user-approval", "approval"}:
+            approval_blockers = user_approval_record_blockers(state)
+            if approval_blockers:
+                fail("user_approval_blocked: " + "; ".join(approval_blockers))
         guard = evaluate_gate(state, lane["name"], include_target_workers=True)
         if not guard["allowed"]:
             fail("gate_blocked: " + "; ".join(guard["blockers"]))
@@ -2573,22 +2741,24 @@ def register_worker(args: argparse.Namespace) -> None:
     runtime = args.lane_runtime
     if runtime not in LANE_RUNTIMES:
         fail(f"Unsupported laneRuntime: {runtime}")
+    runtime_profile = RUNTIME_REGISTRY.get(runtime)
+    is_independent_runtime = bool(runtime_profile and runtime_profile.independent)
     request_id = (args.request_id or "").strip()
-    if runtime in TRUE_WORKER_RUNTIMES and not request_id:
+    if is_independent_runtime and not request_id:
         fail("requestId is required for independent workers.")
     if request_id and any(worker.get("requestId") == request_id for worker in workers):
         fail(f"requestId already exists: {request_id}")
     thread_id = (args.thread_id or "").strip()
     runtime_handle = (args.runtime_handle or "").strip()
-    if runtime == "native_thread_lane":
+    if runtime_profile and runtime_profile.identity_binding == "thread_id_equals_runtime_handle":
         if not thread_id:
-            fail("native_thread_lane requires a non-empty threadId.")
+            fail(f"{runtime} requires a non-empty threadId.")
         if not runtime_handle:
-            fail("native_thread_lane requires runtimeHandle equal to threadId.")
+            fail(f"{runtime} requires runtimeHandle equal to threadId.")
         if thread_id != runtime_handle:
-            fail("native_thread_lane runtimeHandle must equal threadId.")
-    if runtime in TRUE_WORKER_RUNTIMES and not runtime_handle:
-        fail("runtimeHandle is required for native thread and managed agent workers.")
+            fail(f"{runtime} runtimeHandle must equal threadId.")
+    if is_independent_runtime and not runtime_handle:
+        fail("runtimeHandle is required for independent workers.")
     if runtime_handle and any(
         worker.get("runtimeHandle") == runtime_handle
         and worker.get("contractRevision") == revision
@@ -2596,19 +2766,25 @@ def register_worker(args: argparse.Namespace) -> None:
         for worker in workers
     ):
         fail(f"runtimeHandle already has a current worker identity: {runtime_handle}")
-    if lane.get("workerRequired") and runtime not in TRUE_WORKER_RUNTIMES:
+    if lane.get("workerRequired") and not is_independent_runtime:
         fail(f"Lane {lane['name']} requires a real independent worker runtime.")
     policy = state["executionPolicy"]
-    if runtime in TRUE_WORKER_RUNTIMES and runtime not in policy.get("eligibleRuntimes", []):
+    if is_independent_runtime and runtime not in policy.get("eligibleRuntimes", []):
         fail(f"laneRuntime is not eligible under executionPolicy: {runtime}")
     if (
         is_distributed_mode(policy.get("mode", ""))
         and policy.get("runtimeSelectionPolicy") == "native_session_required"
-        and runtime != "native_thread_lane"
+        and (
+            runtime_profile is None
+            or not profile_satisfies(
+                runtime_profile,
+                requirement_for_lane(lane, "native_session_required"),
+            )
+        )
     ):
         fail(
-            "runtimeSelectionPolicy=native_session_required requires "
-            "laneRuntime=native_thread_lane."
+            "runtimeSelectionPolicy=native_session_required requires an independent, "
+            "user-visible, project-capable runtime profile."
         )
     preference = lane.get("runtimePreference", "auto")
     lifecycle = lane.get("workerLifecycle", "ephemeral")
@@ -2616,23 +2792,40 @@ def register_worker(args: argparse.Namespace) -> None:
         fail(
             f"Lane {lane['name']} requires runtimePreference={preference}; got {runtime}."
         )
-    if lifecycle == "persistent" and runtime != "native_thread_lane":
+    if lifecycle == "persistent" and (
+        runtime_profile is None or not runtime_profile.supports_persistent
+    ):
         fail(
-            f"Lane {lane['name']} is persistent and requires native_thread_lane."
+            f"Lane {lane['name']} is persistent and requires native_thread_lane today; "
+            "the capability gate is supportsPersistent=true."
         )
-    if runtime == "native_thread_lane" and not native_thread_approved(policy):
+    if (
+        runtime_profile
+        and runtime_profile.requires_explicit_approval
+        and runtime not in approved_runtime_ids(policy)
+    ):
         fail(
-            "native_thread_lane requires explicit nativeThreadUserApproved=true "
-            "in executionPolicy."
+            f"{runtime} requires explicit runtime approval through "
+            f"executionPolicy.{runtime_profile.approval_policy_field}=true."
         )
     project_id = (args.project_id or "").strip()
     project_environment = (args.project_environment or "").strip()
     project_target_type = (args.project_target_type or "").strip() or (
         "project" if project_id else "projectless"
     )
+    if runtime_profile and not runtime_profile.supports_scope(project_target_type):
+        fail(
+            f"projectTargetType={project_target_type} is not supported by the "
+            f"{runtime} runtime profile."
+        )
     target_project_id = str(policy.get("targetProjectId", "") or "").strip()
     project_affinity_policy = policy.get("projectAffinityPolicy", "legacy_best_effort")
-    if runtime == "native_thread_lane":
+    project_affinity_runtime = bool(
+        runtime_profile
+        and runtime_profile.user_visible
+        and runtime_profile.supports_scope("project")
+    )
+    if project_affinity_runtime:
         if project_affinity_policy == "inherit_or_resolve_required":
             if not target_project_id:
                 fail(
@@ -2640,12 +2833,12 @@ def register_worker(args: argparse.Namespace) -> None:
                 )
             if not project_id:
                 fail(
-                    "project_affinity_required: native_thread_lane requires the created "
-                    "thread projectId."
+                    f"project_affinity_required: {runtime} requires the created "
+                    "Session projectId."
                 )
             if project_target_type != "project":
                 fail(
-                    "project_affinity_required: native_thread_lane requires "
+                    f"project_affinity_required: {runtime} requires "
                     "projectTargetType=project."
                 )
             if project_id != target_project_id:
@@ -2655,7 +2848,7 @@ def register_worker(args: argparse.Namespace) -> None:
                 )
             if project_environment not in PROJECT_ENVIRONMENTS:
                 fail(
-                    "project_affinity_required: native_thread_lane requires "
+                    f"project_affinity_required: {runtime} requires "
                     "projectEnvironment=local or worktree."
                 )
         elif target_project_id and project_target_type != "project":
@@ -2677,25 +2870,28 @@ def register_worker(args: argparse.Namespace) -> None:
             and project_affinity_policy == "allow_projectless"
             and not policy.get("projectlessUserApproved", False)
         ):
-            fail("Projectless native worker requires projectlessUserApproved=true.")
+            fail("Projectless Session worker requires projectlessUserApproved=true.")
     callback_expected = not args.no_callback_expected
-    if runtime in TRUE_WORKER_RUNTIMES and not callback_expected:
+    if is_independent_runtime and not callback_expected:
         fail("Independent workers must require a callback.")
     callback_mode = args.callback_mode_expected or (
-        "active_message_required"
-        if runtime == "native_thread_lane"
-        else "managed_result_collected"
-        if runtime == "managed_agent_worker"
+        runtime_profile.default_callback_mode
+        if runtime_profile
         else "controller_poll_allowed"
     )
+    if runtime_profile and callback_mode not in runtime_profile.callback_modes:
+        fail(
+            f"callbackModeExpected={callback_mode} is not supported by the "
+            f"{runtime} runtime profile."
+        )
     thread_tool_check = (args.thread_tool_check or "").strip()
-    if runtime in TRUE_WORKER_RUNTIMES and not thread_tool_check:
+    if is_independent_runtime and not thread_tool_check:
         fail("Independent workers require a non-empty threadToolCheck.")
     controller_thread_id = (args.controller_thread_id or "").strip()
     reply_to_thread_id = (args.reply_to_thread_id or "").strip()
-    if runtime == "native_thread_lane" and callback_mode == "active_message_required":
+    if runtime_profile and runtime_profile.requires_thread_routing and callback_mode == "active_message_required":
         if not controller_thread_id or not reply_to_thread_id:
-            fail("Native active_message_required workers require controllerThreadId and replyToThreadId.")
+            fail("Thread-routed active_message_required workers require controllerThreadId and replyToThreadId.")
     write_boundary = (args.write_boundary or lane["writeBoundary"]).strip()
     if write_boundary != lane["writeBoundary"]:
         fail(f"Worker writeBoundary must match lane boundary {lane['writeBoundary']}.")
@@ -2719,6 +2915,20 @@ def register_worker(args: argparse.Namespace) -> None:
             writer_handles = {worker.get("runtimeHandle") for worker in writer_workers}
             if runtime_handle in writer_handles:
                 fail("Review worker must use an independent runtime identity.")
+    elif lane.get("kind") in DECISION_REVIEW_KINDS:
+        subject_workers = review_subject_workers(state, lane["name"])
+        known_ids = {worker["workerId"] for worker in subject_workers}
+        unknown = sorted(set(reviews_worker_ids) - known_ids)
+        missing = sorted(known_ids - set(reviews_worker_ids))
+        if not known_ids:
+            fail("Decision review requires a completed current-revision dependency worker.")
+        if unknown:
+            fail(f"reviewsWorkerIds reference non-current decision-review subjects: {', '.join(unknown)}")
+        if missing:
+            fail(f"Decision review worker must cover dependency workers: {', '.join(missing)}")
+        subject_handles = {worker.get("runtimeHandle") for worker in subject_workers}
+        if runtime_handle in subject_handles:
+            fail("Decision review worker must use an independent runtime identity.")
     contract_digest = (args.contract_digest or "").strip()
     deliverable_fingerprint = (args.deliverable_fingerprint or "").strip()
     if is_semantic_strict(state):
@@ -2761,6 +2971,9 @@ def register_worker(args: argparse.Namespace) -> None:
         "projectEnvironment": project_environment,
         "lane": lane["name"],
         "laneRuntime": runtime,
+        "runtimeRegistryVersion": RUNTIME_REGISTRY.registry_version if runtime_profile else "",
+        "runtimeProfileVersion": runtime_profile.profile_version if runtime_profile else "",
+        "runtimeProfileFingerprint": runtime_profile.fingerprint if runtime_profile else "",
         "workerLifecycle": lifecycle,
         "contextPolicy": lane.get("contextPolicy", "packet_only"),
         "runtimePreference": preference,
@@ -2836,6 +3049,104 @@ def list_workers(args: argparse.Namespace) -> None:
     print(json.dumps(state.get("workers", []), ensure_ascii=False, indent=2))
 
 
+def feedback_classification_for_state(state: dict[str, Any] | None, feedback: str) -> dict[str, Any]:
+    lane_names = [lane.get("name", "") for lane in (state or {}).get("lanes", [])]
+    contract_spec = (state or {}).get("contractSpec")
+    governance = contract_spec.get("decisionGovernance", {}) if isinstance(contract_spec, dict) else {}
+    if not isinstance(governance, dict):
+        governance = {}
+    try:
+        return classify_feedback(
+            feedback,
+            lane_names=lane_names,
+            governance=governance,
+        )
+    except ValueError as error:
+        fail(str(error))
+
+
+def classify_feedback_command(args: argparse.Namespace) -> None:
+    state = load_state(Path(args.state).expanduser()) if args.state else None
+    print(
+        json.dumps(
+            feedback_classification_for_state(state, args.feedback),
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+def ingest_feedback(args: argparse.Namespace) -> None:
+    """Classify feedback and atomically open a correction when required."""
+    path = Path(args.state).expanduser()
+    state = load_state(path)
+    require_continuation_state(state)
+    feedback = require_nonempty(args.feedback, "feedback")
+    classification = feedback_classification_for_state(state, feedback)
+    if not classification["requiresContractRevision"]:
+        print(
+            json.dumps(
+                {"classification": classification, "correctionEvent": None},
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+    recommended = require_nonempty(
+        classification.get("suggestedInvalidFromLane"), "suggestedInvalidFromLane"
+    )
+    find_lane(state, recommended)
+    feedback_digest = hashlib.sha256(feedback.encode("utf-8")).hexdigest()
+    existing = next(
+        (
+            event for event in state.get("correctionEvents", [])
+            if event.get("contractRevision") == state["contractRevision"]
+            and event.get("feedbackDigest") == feedback_digest
+            and event.get("status") == "open"
+        ),
+        None,
+    )
+    if existing is not None:
+        print(
+            json.dumps(
+                {"classification": classification, "correctionEvent": existing, "idempotentReplay": True},
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+    event_id = (args.event_id or f"feedback-{sha256_json({'revision': state['contractRevision'], 'feedbackDigest': feedback_digest})[:20]}").strip()
+    if any(event.get("id") == event_id for event in state.get("correctionEvents", [])):
+        fail(f"Correction event ID already exists: {event_id}")
+    categories = classification.get("impactedCategories", [])
+    event = {
+        "id": require_nonempty(event_id, "eventId"),
+        "status": "open",
+        "source": "user_feedback",
+        "fromLane": "controller",
+        "summary": feedback,
+        "feedbackDigest": feedback_digest,
+        "category": categories[0] if categories else "contract_correction",
+        "requirementIds": classification["impactedRequirementIds"],
+        "recommendedInvalidFromLane": recommended,
+        "preserveUnmentioned": classification["preserveUnmentioned"],
+        "matchedTriggers": classification["matchedTriggers"],
+        "contractRevision": state["contractRevision"],
+        "created_at": now(),
+    }
+    state.setdefault("correctionEvents", []).append(event)
+    stale_current_approvals(state, f"user feedback correction opened: {event_id}")
+    invalidate_finalization(state, f"user feedback correction opened: {event_id}")
+    save_state(path, state)
+    print(
+        json.dumps(
+            {"classification": classification, "correctionEvent": event},
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
 def record_correction(args: argparse.Namespace) -> None:
     path = Path(args.state).expanduser()
     state = load_state(path)
@@ -2862,6 +3173,7 @@ def record_correction(args: argparse.Namespace) -> None:
     }
     state.setdefault("correctionEvents", []).append(event)
     stale_current_approvals(state, f"correction opened: {event_id}")
+    invalidate_finalization(state, f"correction opened: {event_id}")
     save_state(path, state)
     print(json.dumps(event, ensure_ascii=False, indent=2))
 
@@ -3258,7 +3570,9 @@ def record_callback(args: argparse.Namespace) -> None:
                         state, load_json_value(args.write_receipt) if args.write_receipt else None
                     )
     observed_mode = args.callback_mode_observed or (
-        "managed_result_collected" if worker.get("laneRuntime") == "managed_agent_worker" else "unspecified"
+        "managed_result_collected"
+        if worker.get("callbackModeExpected") == "managed_result_collected"
+        else "unspecified"
     )
     if args.gate_decision == "pass":
         mode_error = callback_mode_error(worker, observed_mode)
@@ -3465,6 +3779,7 @@ def revise_contract(args: argparse.Namespace) -> None:
             fail("semantic_strict revise-contract requires a complete contractSpec.")
         else:
             new_contract_spec = validate_contract_spec(load_json_value(args.contract_spec), lanes)
+        require_decision_confirmation_gate(new_contract_spec)
         new_contract_digest = compute_contract_digest(new_contract_spec, new_revision)
     elif new_blueprint_compiled is not None:
         if args.contract_spec:
@@ -3744,6 +4059,17 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("list-workers")
     p.add_argument("--state", required=True)
     p.set_defaults(func=list_workers)
+
+    p = sub.add_parser("classify-feedback")
+    p.add_argument("--state", default="")
+    p.add_argument("--feedback", required=True)
+    p.set_defaults(func=classify_feedback_command)
+
+    p = sub.add_parser("ingest-feedback")
+    p.add_argument("--state", required=True)
+    p.add_argument("--feedback", required=True)
+    p.add_argument("--event-id", default="")
+    p.set_defaults(func=ingest_feedback)
 
     p = sub.add_parser("record-correction")
     p.add_argument("--state", required=True)

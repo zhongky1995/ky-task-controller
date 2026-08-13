@@ -1,0 +1,51 @@
+{
+  "registryVersion": "1.0",
+  "profiles": [
+    {
+      "runtimeId": "native_thread_lane",
+      "profileVersion": "1.0",
+      "independent": true,
+      "userVisible": true,
+      "supportsPersistent": true,
+      "requiresExplicitApproval": true,
+      "approvalPolicyField": "nativeThreadUserApproved",
+      "identityBinding": "thread_id_equals_runtime_handle",
+      "scopeKinds": [
+        "project",
+        "projectless"
+      ],
+      "defaultScopeKind": "project",
+      "callbackModes": [
+        "active_message_required",
+        "active_message_preferred",
+        "controller_poll_allowed"
+      ],
+      "defaultCallbackMode": "active_message_required",
+      "requiresThreadRouting": true,
+      "selectionPriority": 20
+    },
+    {
+      "runtimeId": "managed_agent_worker",
+      "profileVersion": "1.0",
+      "independent": true,
+      "userVisible": false,
+      "supportsPersistent": false,
+      "requiresExplicitApproval": false,
+      "approvalPolicyField": "",
+      "identityBinding": "opaque_runtime_handle",
+      "scopeKinds": [
+        "projectless"
+      ],
+      "defaultScopeKind": "projectless",
+      "callbackModes": [
+        "active_message_required",
+        "active_message_preferred",
+        "controller_poll_allowed",
+        "managed_result_collected"
+      ],
+      "defaultCallbackMode": "managed_result_collected",
+      "requiresThreadRouting": false,
+      "selectionPriority": 10
+    }
+  ]
+}

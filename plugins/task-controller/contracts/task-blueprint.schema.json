@@ -14,11 +14,14 @@
     "sources": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/identified"}},
     "intentAnchors": {"type": "array", "items": {"$ref": "#/$defs/identified"}},
     "decisions": {"type": "array", "items": {"type": "object", "required": ["id", "statement"], "properties": {"id": {"type": "string"}, "statement": {"type": "string"}, "status": {"type": "string"}}}},
-    "changePolicy": {"type": "object", "required": ["preserve", "allowed", "forbidden"], "properties": {"preserve": {"type": "array", "items": {"$ref": "#/$defs/identified"}}, "allowed": {"type": "array", "items": {"$ref": "#/$defs/identified"}}, "forbidden": {"type": "array", "items": {"$ref": "#/$defs/identified"}}}},
+    "changePolicy": {"type": "object", "required": ["preserve", "allowed", "forbidden"], "properties": {"preserve": {"type": "array", "items": {"$ref": "#/$defs/governedIdentified"}}, "allowed": {"type": "array", "items": {"$ref": "#/$defs/governedIdentified"}}, "forbidden": {"type": "array", "items": {"$ref": "#/$defs/governedIdentified"}}}},
     "acceptanceCases": {"type": "array", "items": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}, "description": {"type": "string"}, "statement": {"type": "string"}}}},
     "approvals": {"type": "object", "properties": {"sampleGate": {"type": "object"}, "userApprovalGate": {"type": "object"}}},
     "writePolicy": {"type": "object"},
     "standards": {}, "assumptions": {}, "nonGoals": {}, "capacity": {}, "changeTriggers": {}
   },
-  "$defs": {"identified": {"oneOf": [{"type": "string", "minLength": 1}, {"type": "object", "required": ["id"], "properties": {"id": {"type": "string", "minLength": 1}}}]}}
+  "$defs": {
+    "identified": {"oneOf": [{"type": "string", "minLength": 1}, {"type": "object", "required": ["id"], "properties": {"id": {"type": "string", "minLength": 1}}}]},
+    "governedIdentified": {"oneOf": [{"type": "string", "minLength": 1}, {"type": "object", "required": ["id"], "properties": {"id": {"type": "string", "minLength": 1}, "authority": {"enum": ["locked", "agent_may_decide", "propose_then_confirm"]}, "category": {"type": "string"}}}]}
+  }
 }

@@ -31,6 +31,15 @@ These presets constrain the business shape of the final artifact. Use them with
 - Approval: use user approval when a sample claim/evidence treatment determines the rest of the report.
 - Forbidden: converting background reference into fact, hiding evidence gaps, internal analysis paths, and process narration in the final report.
 
+## 客户报价 / 商业预算
+
+- Audience and use mode: client decision-makers approving what they buy, what it costs, and how delivery is judged.
+- Decision authority: presentation and layout choices may be `agent_may_decide`; pricing structure, billable items, budget allocation, KPI binding, scope commitments, and contract terms default to `propose_then_confirm` unless the user explicitly grants a different authority.
+- Required graph: `source-normalization -> pricing-model -> commercial-review -> user-approval -> workbook-architecture -> implementation -> final-review`. Workbook architecture must not run in parallel with an unapproved pricing model.
+- Commercial review: every charge item must show independent deliverable value, purchase reason, overlap decision, removal impact, and source reference. Pairwise overlap, KPI causality, budget rationale, and the client purchase hierarchy require artifact-bound evidence.
+- Approval: bind user approval to the fingerprinted `commercial-pricing-model` artifact produced by the independent commercial review. Approval blocks workbook architecture, implementation, and final review; a later correction makes it stale.
+- Forbidden: duplicate node charges, filler fees used only to force a target total, internal execution steps presented as first-level client purchase modules, unverifiable KPI deductions, and a reviewer assertion without evidence references.
+
 ## 飞书 Base / 驾驶舱 / Wiki
 
 - Audience and use mode: named operators and managers using the artifact repeatedly, not merely reviewing a prototype.

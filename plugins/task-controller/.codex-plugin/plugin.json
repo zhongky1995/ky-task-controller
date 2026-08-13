@@ -1,6 +1,6 @@
 {
   "name": "task-controller",
-  "version": "0.3.1+codex.20260809152214",
+  "version": "0.5.0+codex.20260813174654",
   "description": "Task boundary planning plus KY-TASK controller protocol for gated multi-lane Codex execution.",
   "author": {
     "name": "Zhuanz"
@@ -10,7 +10,7 @@
   "interface": {
     "displayName": "KY-TASK",
     "shortDescription": "\u4efb\u52a1\u5b9a\u754c + lane / worker \u603b\u63a7\u6267\u884c\u3002",
-    "longDescription": "KY-TASK bundles task-boundary-planner with a controller protocol and runtime adapter: lock a task contract, resolve and preserve Codex project affinity, define evidence and acceptance gates, split professional lanes, create project-scoped native Session workers for dependency-ready batches, run up to four independent lanes concurrently, preserve write boundaries, record callbacks, block unsafe transitions, and verify final outputs.",
+    "longDescription": "KY-TASK bundles task-boundary-planner with a controller protocol and runtime adapter: lock a task contract, govern high-impact commercial decisions, resolve and preserve Codex project affinity, define evidence and acceptance gates, split professional lanes, create project-scoped native Session workers for dependency-ready batches, run up to four independent lanes concurrently, ingest user corrections, preserve write boundaries, record callbacks, block unsafe transitions, and verify final outputs.",
     "developerName": "Zhuanz",
     "category": "Productivity",
     "capabilities": [

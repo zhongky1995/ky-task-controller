@@ -1,0 +1,20 @@
+{
+  "id": "pricing-commercial-verifier",
+  "name": "Pricing commercial verifier",
+  "version": "1.0.0",
+  "source": {"type": "skill", "locator": "quote-pricing-executor"},
+  "status": "active",
+  "capabilityType": "verifier",
+  "placement": "dynamic-adapter",
+  "domains": ["client-pricing", "pricing"],
+  "triggers": ["commercial model", "billable item", "KPI", "budget allocation", "duplicate charge"],
+  "exclusions": ["internal-only"],
+  "resourcePatterns": ["*.xlsx", "*.docx", "*.pdf"],
+  "inputs": [],
+  "outputs": [],
+  "operations": [],
+  "dependencies": {"skills": ["quote-pricing-executor"], "tools": [], "binaries": [], "runtimes": [], "authScopes": [], "versionRange": "*"},
+  "verification": {"methods": ["commercial-evidence", "independent-review"], "verifierCapabilities": []},
+  "routing": {"priority": 110, "mutuallyExclusiveWith": [], "fallback": [], "unavailableBehavior": "block"},
+  "fingerprint": "88b4c6bc4798485dc3d5d11c102b23db8563935ce136a5d2e2e625cca6308da0"
+}

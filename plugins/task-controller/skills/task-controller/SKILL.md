@@ -58,6 +58,8 @@ Parallelism is dependency-driven:
 - When an eligible worker runtime is available and split execution is mandatory, execution lanes must use `managed_agent_worker` or `native_thread_lane`; the controller may not run them as `single_thread_section`.
 - The controller may perform only emergency stop messages, callback collection, gate recording, and user-facing merge decisions. It must not use its own thread as the implementation worker for external writes.
 - Review must be separate from implementation.
+- Commercial authority must be explicit: `locked`, `agent_may_decide`, or `propose_then_confirm`. Client-facing pricing structure, billable items, budget allocation, KPI binding, scope commitments, and contract terms default to `propose_then_confirm`.
+- A client-facing pricing workbook must use the `client-pricing` scenario graph. Do not start workbook architecture until the evidence-backed commercial model has passed an independent decision review and the user has approved its exact fingerprint.
 - If no real worker runtime is available, record a non-empty downgrade reason before emulating the lanes sequentially in the current thread.
 - Do not bind to a specific multi-agent plugin unless the user explicitly requests it and callable tools are available.
 - Do not ask the user which workers they want. Propose a role map from the task, materials, risks, tools, write boundaries, and acceptance criteria.
@@ -231,6 +233,8 @@ python3 scripts/task_controller_state.py next-lane --state /tmp/controller.json
 
 For a new `TaskBlueprint`, use `plan-blueprint` to read-only compile the routing decision, formal `SolutionGraph`, projected lanes, and `WorkerPackets`. It never dispatches workers. `init --task-blueprint --auto-plan` persists that plan and uses its lane projection when no `laneDefinitions` are supplied. A graph-backed worker registration and callback must include the current packet ID and digest; workers are not dispatched automatically by planning or initialization.
 
+For change-policy items, set `authority` only when the user has actually fixed that boundary. Preserve and forbidden items are always `locked`. Ordinary allowed edits default to `agent_may_decide`; commercially material allowed edits default to `propose_then_confirm`. Scenario policy may inject mandatory acceptance cases and a fingerprint-bound approval gate into the effective Blueprint. Treat those applications as control policy, not optional suggestions.
+
 The helper records state only. It does not create threads, call Feishu, or write final artifacts.
 
 ### TaskBlueprint and shadow routing
@@ -284,7 +288,7 @@ When `userApprovalGate.required` is true, record approval with `record-approval`
 
 When `sampleGate.required` is true, the sample lane must be current-revision `done/pass`, including its named `acceptanceIds`, before any lane in `blocks` can register, gate, callback-pass, or complete.
 
-If a worker sees correction language, it must submit a `correctionEvents` entry with an explicit `recommendedInvalidFromLane` instead of interpreting the text as ordinary notes. The callback cannot pass. If the controller directly observes user language such as “不对”, “我要的是”, “按上一版”, “目标变了”, “不要改这个”, “保留原样”, “样稿不对”, or “来源换了”, call `task_controller_record_correction` immediately; do not wait for or fabricate a worker callback. Then call `task_controller_revise_contract` to consume every open event ID, using an `invalidFromLane` no later than the earliest recommendation. Every open correction blocks registration, gates, and completion. Strict revision always supplies the complete replacement `contractSpec`; proactive revision without a correction is still allowed.
+If a worker sees correction language, it must submit a `correctionEvents` entry with an explicit `recommendedInvalidFromLane` instead of interpreting the text as ordinary notes. The callback cannot pass. If the controller directly observes user language such as “不对”, “我要的是”, “按上一版”, “目标变了”, “不要改这个”, “保留原样”, “不能收费”, “重复收费”, “样稿不对”, or “来源换了”, call `task_controller_ingest_feedback` immediately. It classifies and atomically records contract-level feedback; do not first reinterpret it as an ordinary edit. Use `task_controller_classify_feedback` only for read-only inspection. Then call `task_controller_revise_contract` to consume every open event ID, using an `invalidFromLane` no later than the earliest recommendation. Every open correction blocks registration, gates, and completion. Strict revision always supplies the complete replacement `contractSpec`; proactive revision without a correction is still allowed. `task_controller_record_correction` remains the explicit low-level fallback.
 
 This state machine is not a security sandbox. It cannot stop a controller or worker that bypasses KY-TASK and directly calls an external write tool. It only makes KY-TASK-managed dispatch, registration, callback pass, gate, and completion fail closed. Controller prompts and operating discipline must prohibit direct-write bypasses.
 
@@ -303,6 +307,8 @@ Installed MCP tools can also record worker/session state:
 - `task_controller_register_worker`
 - `task_controller_update_worker`
 - `task_controller_list_workers`
+- `task_controller_classify_feedback`
+- `task_controller_ingest_feedback`
 - `task_controller_record_correction`
 - `task_controller_record_approval`
 - `task_controller_record_callback`

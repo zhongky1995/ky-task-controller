@@ -10,6 +10,8 @@ from hashlib import sha256
 import json
 from typing import Any
 
+from control_plane.decision_governance import AUTHORITIES, derive_decision_governance
+
 
 INTERACTION_MODES = {"execute", "discuss_only", "plan_only"}
 REQUIRED_FIELDS = (
@@ -119,6 +121,15 @@ def validate_blueprint(blueprint: Any) -> dict[str, Any]:
         entries = _array(policy.get(field), f"changePolicy.{field}")
         for entry in entries:
             _item_id(entry, f"changePolicy.{field} item")
+            if isinstance(entry, dict) and "authority" in entry:
+                authority = entry.get("authority")
+                if authority not in AUTHORITIES:
+                    _fail(
+                        f"changePolicy.{field} item.authority must be one of: "
+                        + ", ".join(sorted(AUTHORITIES))
+                    )
+                if field in {"preserve", "forbidden"} and authority != "locked":
+                    _fail(f"changePolicy.{field} items can only use authority=locked")
     approvals = _object(result["approvals"], "approvals")
     for field in ("sampleGate", "userApprovalGate"):
         if field in approvals and not isinstance(approvals[field], dict):
@@ -228,6 +239,7 @@ def compile_blueprint(blueprint: Any, lane_definitions: Any) -> dict[str, Any]:
         mapped(f"deliverable.units.{unit['id']}", "deliverable.units")
 
     policy = bp["changePolicy"]
+    decision_governance = derive_decision_governance(bp, lanes)
     contract: dict[str, Any] = {
         "specVersion": "2.0",
         "interactionMode": bp["interactionMode"],
@@ -239,6 +251,7 @@ def compile_blueprint(blueprint: Any, lane_definitions: Any) -> dict[str, Any]:
         "acceptance": _semantic_items(bp["acceptanceCases"]),
         "intentAnchors": _semantic_items(bp["intentAnchors"]),
         "decisionLedger": [],
+        "decisionGovernance": decision_governance,
         "sampleGate": _gate(bp["approvals"].get("sampleGate"), "sample", deliverable["id"]),
         "userApprovalGate": _gate(bp["approvals"].get("userApprovalGate"), "user", deliverable["id"]),
     }
@@ -254,6 +267,11 @@ def compile_blueprint(blueprint: Any, lane_definitions: Any) -> dict[str, Any]:
         mapped(f"decisions.{item['id']}", "decisionLedger")
     mapped("approvals.sampleGate", "sampleGate")
     mapped("approvals.userApprovalGate", "userApprovalGate")
+    trace["inferred"].append({
+        "source": "changePolicy",
+        "target": "decisionGovernance",
+        "reason": "decision authority and commercial impact derived deterministically",
+    })
     if bp.get("writePolicy") is not None:
         contract["writePolicy"] = deepcopy(bp["writePolicy"])
         mapped("writePolicy", "writePolicy")
@@ -274,6 +292,16 @@ def compile_blueprint(blueprint: Any, lane_definitions: Any) -> dict[str, Any]:
     if bp["interactionMode"] == "execute" and approved_target and "writePolicy" not in contract:
         required_unmapped.append("writePolicy")
         trace["conflicts"].append({"source": "writePolicy", "reason": "execute approved-target requires writePolicy"})
+    if (
+        bp["interactionMode"] == "execute"
+        and decision_governance.get("confirmationRequired")
+        and not contract["userApprovalGate"].get("required")
+    ):
+        required_unmapped.append("approvals.userApprovalGate")
+        trace["conflicts"].append({
+            "source": "changePolicy",
+            "reason": "propose_then_confirm decisions require a fingerprint-bound userApprovalGate",
+        })
     for gate_name in ("sampleGate", "userApprovalGate"):
         gate = contract[gate_name]
         if gate.get("required"):

@@ -5,15 +5,119 @@ import readline from "node:readline";
 import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "KY-TASK State MCP";
-const HELPER = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../scripts/task_controller_state.py");
+const PLUGIN_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const HELPER = path.resolve(PLUGIN_ROOT, "scripts/task_controller_state.py");
+const RUNTIME_PROFILE_PATH = path.resolve(PLUGIN_ROOT, "config/worker-runtime-profiles.json");
 const JsonRpcError = { METHOD_NOT_FOUND: -32601, INVALID_PARAMS: -32602 };
+const RUNTIME_PROFILE_FIELDS = [
+  "runtimeId",
+  "profileVersion",
+  "independent",
+  "userVisible",
+  "supportsPersistent",
+  "requiresExplicitApproval",
+  "approvalPolicyField",
+  "identityBinding",
+  "scopeKinds",
+  "defaultScopeKind",
+  "callbackModes",
+  "defaultCallbackMode",
+  "requiresThreadRouting",
+  "selectionPriority",
+];
+const PROFILE_IDENTITY_BINDINGS = new Set(["thread_id_equals_runtime_handle", "opaque_runtime_handle"]);
+const PROFILE_SCOPE_KINDS = new Set(["project", "projectless"]);
+const PROFILE_CALLBACK_MODES = new Set([
+  "active_message_required",
+  "active_message_preferred",
+  "controller_poll_allowed",
+  "managed_result_collected",
+]);
+
+function loadRuntimeProfiles() {
+  let registry;
+  try {
+    registry = JSON.parse(fs.readFileSync(RUNTIME_PROFILE_PATH, "utf8"));
+  } catch (error) {
+    throw new Error(`Cannot load worker runtime profiles: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (!registry || typeof registry !== "object" || Array.isArray(registry)) {
+    throw new Error("Worker runtime profile registry must be an object.");
+  }
+  if (typeof registry.registryVersion !== "string" || !registry.registryVersion.trim()) {
+    throw new Error("Worker runtime profile registry requires registryVersion.");
+  }
+  if (!Array.isArray(registry.profiles) || registry.profiles.length === 0) {
+    throw new Error("Worker runtime profile registry requires a non-empty profiles array.");
+  }
+  const seen = new Set();
+  const priorities = new Set();
+  for (const [index, profile] of registry.profiles.entries()) {
+    if (!profile || typeof profile !== "object" || Array.isArray(profile)) {
+      throw new Error(`Worker runtime profile ${index} must be an object.`);
+    }
+    const fields = Object.keys(profile).sort();
+    if (JSON.stringify(fields) !== JSON.stringify([...RUNTIME_PROFILE_FIELDS].sort())) {
+      throw new Error(`Worker runtime profile ${index} has missing or unknown fields.`);
+    }
+    if (typeof profile.runtimeId !== "string" || !profile.runtimeId.trim() || seen.has(profile.runtimeId)) {
+      throw new Error(`Worker runtime profile ${index} has a missing or duplicate runtimeId.`);
+    }
+    if (typeof profile.profileVersion !== "string" || !profile.profileVersion.trim()) {
+      throw new Error(`Worker runtime profile ${profile.runtimeId} requires profileVersion.`);
+    }
+    for (const field of [
+      "independent",
+      "userVisible",
+      "supportsPersistent",
+      "requiresExplicitApproval",
+      "requiresThreadRouting",
+    ]) {
+      if (typeof profile[field] !== "boolean") {
+        throw new Error(`Worker runtime profile ${profile.runtimeId} requires ${field}:boolean.`);
+      }
+    }
+    if (typeof profile.approvalPolicyField !== "string"
+      || profile.requiresExplicitApproval !== Boolean(profile.approvalPolicyField.trim())) {
+      throw new Error(`Worker runtime profile ${profile.runtimeId} has an invalid approvalPolicyField.`);
+    }
+    if (!PROFILE_IDENTITY_BINDINGS.has(profile.identityBinding)) {
+      throw new Error(`Worker runtime profile ${profile.runtimeId} has an invalid identityBinding.`);
+    }
+    if (!Array.isArray(profile.scopeKinds) || profile.scopeKinds.length === 0
+      || profile.scopeKinds.some((scope) => !PROFILE_SCOPE_KINDS.has(scope))
+      || new Set(profile.scopeKinds).size !== profile.scopeKinds.length
+      || !profile.scopeKinds.includes(profile.defaultScopeKind)) {
+      throw new Error(`Worker runtime profile ${profile.runtimeId} has invalid scopeKinds.`);
+    }
+    if (!Array.isArray(profile.callbackModes) || profile.callbackModes.length === 0
+      || profile.callbackModes.some((mode) => !PROFILE_CALLBACK_MODES.has(mode))
+      || new Set(profile.callbackModes).size !== profile.callbackModes.length
+      || !profile.callbackModes.includes(profile.defaultCallbackMode)) {
+      throw new Error(`Worker runtime profile ${profile.runtimeId} has an invalid defaultCallbackMode.`);
+    }
+    if (!Number.isInteger(profile.selectionPriority) || profile.selectionPriority < 0
+      || priorities.has(profile.selectionPriority)) {
+      throw new Error(`Worker runtime profile ${profile.runtimeId} has an invalid or duplicate selectionPriority.`);
+    }
+    seen.add(profile.runtimeId);
+    priorities.add(profile.selectionPriority);
+  }
+  if (!registry.profiles.some((profile) => profile.independent)) {
+    throw new Error("Worker runtime profile registry requires an independent runtime.");
+  }
+  return registry;
+}
+
+const RUNTIME_PROFILE_REGISTRY = loadRuntimeProfiles();
+const TRUE_WORKER_RUNTIMES = RUNTIME_PROFILE_REGISTRY.profiles
+  .filter((profile) => profile.independent)
+  .map((profile) => profile.runtimeId);
 const LANE_RUNTIMES = [
-  "native_thread_lane",
-  "managed_agent_worker",
+  ...TRUE_WORKER_RUNTIMES,
   "single_thread_section",
   "thread_create_unavailable",
 ];
-const TRUE_WORKER_RUNTIMES = ["native_thread_lane", "managed_agent_worker"];
 const WORKER_LIFECYCLES = ["ephemeral", "persistent"];
 const CONTEXT_POLICIES = ["packet_only", "checkpoint_delta"];
 const RUNTIME_PREFERENCES = ["auto", ...TRUE_WORKER_RUNTIMES];
@@ -31,10 +135,7 @@ const INTERACTION_MODES = ["discuss_only", "plan_only", "execute"];
 const WRITE_BOUNDARIES = ["read-only", "draft-file", "approved-target", "review-only"];
 const CALLBACK_EXPECTED = [
   "",
-  "active_message_required",
-  "active_message_preferred",
-  "controller_poll_allowed",
-  "managed_result_collected",
+  ...new Set(RUNTIME_PROFILE_REGISTRY.profiles.flatMap((profile) => profile.callbackModes)),
 ];
 const CALLBACK_OBSERVED = [
   "",
@@ -204,6 +305,9 @@ const semanticItemSchema = {
       properties: {
         id: { type: "string" },
         description: { type: "string" },
+        statement: { type: "string" },
+        category: { type: "string" },
+        authority: { type: "string", enum: ["locked", "agent_may_decide", "propose_then_confirm"] },
         lane: { type: "string" },
         lanes: { type: "array", items: { type: "string" } },
         required: { type: "boolean", default: true },
@@ -287,6 +391,32 @@ const contractSpecSchema = {
         },
         required: ["id", "statement", "status"],
       },
+    },
+    decisionGovernance: {
+      type: "object",
+      properties: {
+        policyVersion: { type: "string" },
+        riskLevel: { type: "string", enum: ["low", "high"] },
+        confirmationRequired: { type: "boolean" },
+        confirmationGatePresent: { type: "boolean" },
+        confirmationItemIds: { type: "array", items: { type: "string" } },
+        triggers: { type: "array", items: { type: "string" } },
+        laneCount: { type: "integer", minimum: 0 },
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              category: { type: "string" },
+              authority: { type: "string", enum: ["locked", "agent_may_decide", "propose_then_confirm"] },
+              source: { type: "string" },
+            },
+            required: ["id", "category", "authority", "source"],
+          },
+        },
+      },
+      required: ["policyVersion", "riskLevel", "confirmationRequired", "items"],
     },
     writePolicy: {
       type: "object",
@@ -724,6 +854,35 @@ const tools = [
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
+    name: "task_controller_classify_feedback",
+    title: "KY-TASK: Classify User Feedback",
+    description: "Read-only classification of user feedback as approval, question, local edit, or contract correction, including the earliest safe invalidation lane.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        statePath: { type: "string", description: "Optional state path used to resolve governance items and lane names." },
+        feedback: { type: "string", minLength: 1 },
+      },
+      required: ["feedback"],
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "task_controller_ingest_feedback",
+    title: "KY-TASK: Ingest User Feedback",
+    description: "Classify user feedback and atomically open a correction event when it changes contract or commercial decisions. Replays of the same open feedback are idempotent.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        statePath: { type: "string" },
+        feedback: { type: "string", minLength: 1 },
+        eventId: { type: "string", default: "" },
+      },
+      required: ["statePath", "feedback"],
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
     name: "task_controller_record_correction",
     title: "KY-TASK: Record Controller Correction",
     description: "Record an independent controller-observed correction event without requiring a worker callback.",
@@ -1150,6 +1309,18 @@ async function handleToolCall(id, params) {
   }
   if (name === "task_controller_list_workers") {
     toolResult(id, "list-workers", args.statePath);
+    return;
+  }
+  if (name === "task_controller_classify_feedback") {
+    const classifyArgs = ["--feedback", requireString(args.feedback, "feedback")];
+    if (args.statePath) classifyArgs.push("--state", requireString(args.statePath, "statePath"));
+    readOnlyToolResult(id, "classify-feedback", classifyArgs);
+    return;
+  }
+  if (name === "task_controller_ingest_feedback") {
+    argv.push("--feedback", requireString(args.feedback, "feedback"));
+    pushString(argv, "--event-id", args.eventId);
+    toolResult(id, "ingest-feedback", args.statePath, argv);
     return;
   }
   if (name === "task_controller_record_correction") {

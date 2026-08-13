@@ -44,9 +44,27 @@ def _pack_score(pack: dict[str, Any], blueprint: dict[str, Any]) -> tuple[int, s
         return None
     domain_hits = domains & set(match.get("domains", []))
     artifact_hits = artifacts & set(match.get("artifactClasses", []))
+    task_type = str(blueprint.get("taskType", "")).lower()
+    task_hits = {
+        value for value in match.get("taskTypes", [])
+        if isinstance(value, str) and value.lower() in task_type
+    }
+    task_type_bypass_domains = set(match.get("taskTypeBypassDomains", []))
+    if (
+        match.get("requireTaskType") is True
+        and not task_hits
+        and not (domain_hits & task_type_bypass_domains)
+    ):
+        return None
+    if match.get("requireDomain") is True and not domain_hits:
+        return None
     if not domain_hits and not artifact_hits:
         return None
-    return (len(domain_hits) * 10 + len(artifact_hits) * 20, "matched " + ", ".join(sorted(domain_hits | artifact_hits)))
+    matched = domain_hits | artifact_hits | task_hits
+    return (
+        len(domain_hits) * 10 + len(artifact_hits) * 20 + len(task_hits) * 30,
+        "matched " + ", ".join(sorted(matched)),
+    )
 
 
 def shadow_route(

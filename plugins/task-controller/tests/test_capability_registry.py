@@ -30,7 +30,7 @@ class CapabilityRegistryTestCase(unittest.TestCase):
         registry = load_registry()
         self.assertGreaterEqual(len(registry.capabilities), 10)
         self.assertEqual({pack.id for pack in registry.scenario_packs}, {
-            "client-deck", "evidence-analysis", "lark-operations", "document-revision"
+            "client-deck", "client-pricing", "evidence-analysis", "lark-operations", "document-revision"
         })
         with tempfile.TemporaryDirectory() as temp:
             cache = Path(temp) / "plugin-cache" / "capabilities"

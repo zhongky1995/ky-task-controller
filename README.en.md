@@ -16,6 +16,9 @@ KY-TASK addresses those failure modes with:
 - required saved-project affinity for every worker Session;
 - exclusive durable write boundaries;
 - structured callbacks and separate implementation/review lanes;
+- decision authority for high-impact commercial changes, with pricing structure, billable items, budget allocation, and KPI binding defaulting to propose-then-confirm;
+- atomic feedback ingestion that opens contract corrections, stales approvals, and blocks execution when the user says the commercial logic is wrong;
+- a shared worker-runtime profile registry for capability-based selection and audit binding;
 - an extensible registry for document, spreadsheet, deck, Lark, and code capabilities.
 
 ## Safe defaults
@@ -48,6 +51,15 @@ Use KY-TASK for this complex task. Lock the task boundary, execute independent l
 ```
 
 Small explanations, narrow single-file edits, and low-ambiguity work can still run directly. Multi-Session execution is a strategy for complex work, not mandatory ceremony for every request.
+
+Client-facing pricing uses a stricter scenario automatically:
+
+```text
+source freeze -> pricing model -> independent commercial review -> user approval
+-> workbook architecture -> implementation -> final review
+```
+
+The commercial review requires artifact-bound evidence for duplicate charges, independent client value, KPI causality, budget filler lines, and client-purchasable module hierarchy.
 
 ## Acknowledgement and recommendation
 

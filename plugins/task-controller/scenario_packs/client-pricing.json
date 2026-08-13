@@ -1,0 +1,202 @@
+{
+  "id": "client-pricing",
+  "version": "1.0.0",
+  "schemaVersion": "1.0",
+  "compatibility": {"taskBlueprint": "^1", "solutionGraph": "^1", "registry": "^1"},
+  "match": {
+    "domains": ["client-pricing", "commercial-pricing", "pricing", "quote"],
+    "artifactClasses": ["workbook", "pricing-workbook", "quote", "quotation"],
+    "taskTypes": ["client-facing", "client_pricing", "client-pricing", "client quote", "quotation"],
+    "taskTypeBypassDomains": ["client-pricing", "commercial-pricing"],
+    "requireTaskType": true,
+    "requireDomain": true,
+    "exclusions": ["internal-only", "comparison-only"]
+  },
+  "blueprintDefaults": {
+    "audience": "client",
+    "commercialEvidenceRequired": true,
+    "decisionGovernance": {
+      "forceUserApproval": true,
+      "approvalArtifactId": "commercial-pricing-model",
+      "approvalBlocks": ["workbook-architecture", "implementation", "final-review"],
+      "requiredAcceptanceCaseIds": [
+        "commercial-model-schema",
+        "charge-items-independent",
+        "no-duplicate-charges",
+        "kpi-causal-verifiable",
+        "budget-allocation-justified",
+        "client-purchase-hierarchy"
+      ]
+    }
+  },
+  "graphTemplate": {
+    "nodes": [
+      {
+        "id": "source-normalization",
+        "title": "Source normalization",
+        "kind": "evidence",
+        "purpose": "Freeze authoritative source terms, price evidence, and client constraints.",
+        "capabilityRequirements": ["evidence-workbook"],
+        "acceptanceIds": [],
+        "outputContracts": [{"id": "normalized-commercial-sources"}]
+      },
+      {
+        "id": "pricing-model",
+        "title": "Commercial pricing model",
+        "kind": "modeling",
+        "purpose": "Model purchase modules, charge items, unit prices, KPI causality, and budget allocation from normalized evidence.",
+        "dependsOn": ["source-normalization"],
+        "capabilityRequirements": ["pricing-analysis"],
+        "acceptanceIds": [],
+        "inputContracts": [{"id": "normalized-commercial-sources"}],
+        "outputContracts": [{"id": "commercial-pricing-model"}]
+      },
+      {
+        "id": "commercial-review",
+        "title": "Independent commercial review",
+        "kind": "decision-review",
+        "purpose": "Adversarially verify that the proposed commercial model is traceable, non-duplicative, causal, and client-purchasable.",
+        "dependsOn": ["pricing-model"],
+        "capabilityRequirements": ["pricing-commercial-verifier"],
+        "capabilityBindings": [{"capabilityId": "pricing-commercial-verifier", "role": "verifier"}],
+        "acceptanceIds": [
+          "commercial-model-schema",
+          "charge-items-independent",
+          "no-duplicate-charges",
+          "kpi-causal-verifiable",
+          "budget-allocation-justified",
+          "client-purchase-hierarchy"
+        ],
+        "inputContracts": [{"id": "commercial-pricing-model"}],
+        "outputContracts": [{"id": "commercial-pricing-model"}]
+      },
+      {
+        "id": "user-approval",
+        "title": "Commercial model approval",
+        "kind": "user-approval",
+        "purpose": "Bind user approval to the independently reviewed commercial pricing model fingerprint.",
+        "dependsOn": ["commercial-review"],
+        "acceptanceIds": [],
+        "inputContracts": [{"id": "commercial-pricing-model"}],
+        "userApprovalRequired": true,
+        "workerRequired": false
+      },
+      {
+        "id": "workbook-architecture",
+        "title": "Workbook architecture",
+        "kind": "design",
+        "purpose": "Design the workbook hierarchy only after the commercial model is approved.",
+        "dependsOn": ["user-approval"],
+        "capabilityRequirements": ["evidence-workbook"],
+        "acceptanceIds": [],
+        "inputContracts": [{"id": "commercial-pricing-model"}],
+        "outputContracts": [{"id": "quote-workbook-architecture"}]
+      },
+      {
+        "id": "implementation",
+        "title": "Pricing workbook implementation",
+        "kind": "implementation",
+        "purpose": "Build the client-facing workbook from the approved commercial model and architecture.",
+        "dependsOn": ["workbook-architecture"],
+        "capabilityRequirements": ["evidence-workbook"],
+        "acceptanceIds": [],
+        "writeBoundary": "approved-target",
+        "writeTargets": "$approvedTargets",
+        "inputContracts": [{"id": "commercial-pricing-model"}, {"id": "quote-workbook-architecture"}],
+        "outputContracts": [{"id": "client-pricing-workbook"}]
+      },
+      {
+        "id": "final-review",
+        "title": "Final pricing review",
+        "kind": "review",
+        "purpose": "Verify the delivered workbook against the approved commercial model and evidence-backed commercial acceptance cases.",
+        "dependsOn": ["implementation"],
+        "capabilityRequirements": ["pricing-commercial-verifier"],
+        "acceptanceIds": [
+          "commercial-model-schema",
+          "charge-items-independent",
+          "no-duplicate-charges",
+          "kpi-causal-verifiable",
+          "budget-allocation-justified",
+          "client-purchase-hierarchy"
+        ],
+        "writeBoundary": "review-only",
+        "inputContracts": [{"id": "client-pricing-workbook"}]
+      }
+    ],
+    "edges": [
+      {"from": "source-normalization", "to": "pricing-model"},
+      {"from": "pricing-model", "to": "commercial-review"},
+      {"from": "commercial-review", "to": "user-approval"},
+      {"from": "user-approval", "to": "workbook-architecture"},
+      {"from": "workbook-architecture", "to": "implementation"},
+      {"from": "implementation", "to": "final-review"}
+    ]
+  },
+  "capabilityRequirements": ["pricing-analysis", "evidence-workbook"],
+  "acceptanceCases": [
+    {
+      "id": "commercial-model-schema",
+      "description": "The model exposes charge items, purchase hierarchy, KPIs, budget allocation, and source lineage.",
+      "version": "1.0",
+      "method": "structural",
+      "procedure": {"requiredKeys": ["chargeItems", "moduleHierarchy", "kpis", "budgetAllocation", "sourceLineage"]},
+      "expected": {"keys": ["chargeItems", "moduleHierarchy", "kpis", "budgetAllocation", "sourceLineage"]},
+      "evidenceSchema": {"minItems": 1},
+      "minimumAttestation": "tool_verified"
+    },
+    {
+      "id": "charge-items-independent",
+      "description": "Every billable item has independent client value and is not already included elsewhere.",
+      "version": "1.0",
+      "method": "business",
+      "procedure": {"externalVerifier": "pricing-commercial-verifier", "risk": "high", "reviewRequired": true},
+      "expected": {"allIndependent": true, "duplicates": 0},
+      "evidenceSchema": {"minItems": 1, "requiredKeys": ["chargeItemId", "independentDeliverable", "purchaseReason", "includedElsewhere", "removalImpact", "sourceRef"]},
+      "minimumAttestation": "independent_reviewed"
+    },
+    {
+      "id": "no-duplicate-charges",
+      "description": "No pair of charge items invoices the same work or delivery node twice.",
+      "version": "1.0",
+      "method": "business",
+      "procedure": {"externalVerifier": "pricing-commercial-verifier", "risk": "high", "reviewRequired": true},
+      "expected": {"duplicates": 0},
+      "evidenceSchema": {"minItems": 1, "requiredKeys": ["pair", "overlapDecision", "sourceRef"]},
+      "minimumAttestation": "independent_reviewed"
+    },
+    {
+      "id": "kpi-causal-verifiable",
+      "description": "Every KPI is causally attributable to a priced module and has a verifiable measurement contract.",
+      "version": "1.0",
+      "method": "business",
+      "procedure": {"externalVerifier": "pricing-commercial-verifier", "risk": "high", "reviewRequired": true},
+      "expected": {"causalAndVerifiable": true},
+      "evidenceSchema": {"minItems": 1, "requiredKeys": ["kpiId", "numerator", "denominator", "checkpoint", "evidenceSource", "causalModule"]},
+      "minimumAttestation": "independent_reviewed"
+    },
+    {
+      "id": "budget-allocation-justified",
+      "description": "Every budget line has evidence and rationale; no filler fee is used to force a target total.",
+      "version": "1.0",
+      "method": "business",
+      "procedure": {"externalVerifier": "pricing-commercial-verifier", "risk": "high", "reviewRequired": true},
+      "expected": {"fillerFees": 0},
+      "evidenceSchema": {"minItems": 1, "requiredKeys": ["budgetLine", "amount", "sourceRef", "rationale", "fillerFee"]},
+      "minimumAttestation": "independent_reviewed"
+    },
+    {
+      "id": "client-purchase-hierarchy",
+      "description": "First-level modules are client purchase categories rather than internal execution steps.",
+      "version": "1.0",
+      "method": "business",
+      "procedure": {"externalVerifier": "pricing-commercial-verifier", "risk": "high", "reviewRequired": true},
+      "expected": {"topLevelModulesArePurchaseCategories": true},
+      "evidenceSchema": {"minItems": 1, "requiredKeys": ["moduleId", "clientPurchaseCategory", "includedChargeItemIds"]},
+      "minimumAttestation": "independent_reviewed"
+    }
+  ],
+  "verifierRequirements": ["pricing-commercial-verifier"],
+  "goldenFixtures": ["fixtures/client-pricing.json"],
+  "fingerprint": "04b70c0c33b44f21e817967d64bb24ce2f67f5598b2c14aba69e5272c06d7ae7"
+}

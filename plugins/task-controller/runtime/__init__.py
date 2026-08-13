@@ -18,6 +18,18 @@ from .operation_dispatcher import (
     transition_permit,
     validate_permit,
 )
+from .worker_runtime import (
+    RUNTIME_REGISTRY,
+    RuntimeProfileError,
+    RuntimeRequirement,
+    WorkerRuntimeProfile,
+    WorkerRuntimeRegistry,
+    approved_runtime_ids,
+    load_runtime_profiles,
+    profile_satisfies,
+    requirement_for_lane,
+    select_runtime,
+)
 
 __all__ = [
     "AdapterProtocol",
@@ -36,4 +48,14 @@ __all__ = [
     "revoke_permit",
     "transition_permit",
     "validate_permit",
+    "RUNTIME_REGISTRY",
+    "RuntimeProfileError",
+    "RuntimeRequirement",
+    "WorkerRuntimeProfile",
+    "WorkerRuntimeRegistry",
+    "approved_runtime_ids",
+    "load_runtime_profiles",
+    "profile_satisfies",
+    "requirement_for_lane",
+    "select_runtime",
 ]
