@@ -122,6 +122,12 @@ const WORKER_LIFECYCLES = ["ephemeral", "persistent"];
 const CONTEXT_POLICIES = ["packet_only", "checkpoint_delta"];
 const RUNTIME_PREFERENCES = ["auto", ...TRUE_WORKER_RUNTIMES];
 const RUNTIME_SELECTION_POLICIES = ["native_session_required", "lane_lifecycle"];
+const ORCHESTRATION_POLICIES = ["strict", "advisory", "legacy"];
+const CONTRIBUTION_ROLES = ["primary", "prerequisite", "supporting", "verification"];
+const SEMANTIC_AUTHORITIES = ["define", "constrain", "implement", "define-and-implement", "verify"];
+const HANDOFF_RISKS = ["low", "medium", "high"];
+const HANDOFF_MODES = ["same-lane", "artifact-contract", "independent"];
+const VERIFY_SCOPES = ["final-artifact", "intermediate-artifact", "upstream-decision"];
 const PROJECT_AFFINITY_POLICIES = ["inherit_or_resolve_required", "allow_projectless"];
 const PROJECT_RESOLUTION_SOURCES = [
   "controller_project",
@@ -263,6 +269,12 @@ const executionPolicySchema = {
       default: "native_session_required",
       description: "Session-first default requires visible native Codex Session tasks for distributed lanes.",
     },
+    orchestrationPolicy: {
+      type: "string",
+      enum: ORCHESTRATION_POLICIES,
+      default: "strict",
+      description: "Strict plans require explicit semantic ownership, dependency reasons, capability needs, and safe handoffs before runtime selection.",
+    },
     nativeThreadUserApproved: {
       type: "boolean",
       default: false,
@@ -295,6 +307,62 @@ const executionPolicySchema = {
       description: "How targetProjectId was inherited or resolved.",
     },
   },
+};
+
+const availableCapabilitySchema = {
+  oneOf: [
+    { type: "string", minLength: 1 },
+    {
+      type: "object",
+      properties: {
+        id: { type: "string", minLength: 1 },
+        name: { type: "string" },
+        status: { type: "string", default: "active" },
+        capabilityType: { type: "string" },
+        domains: { type: "array", items: { type: "string" } },
+        triggers: { type: "array", items: { type: "string" } },
+        inputs: { type: "array", items: { type: "string" } },
+        outputs: { type: "array", items: { type: "string" } },
+      },
+      required: ["id"],
+    },
+  ],
+};
+
+const orchestrationLaneProperties = {
+  name: { type: "string" },
+  kind: { type: "string" },
+  purpose: { type: "string", description: "The lane's actual professional job, not a generic step label." },
+  contributionRole: { type: "string", enum: CONTRIBUTION_ROLES },
+  semanticAuthority: { type: "string", enum: SEMANTIC_AUTHORITIES },
+  semanticOwner: { type: "boolean", default: false },
+  workerRequired: { type: "boolean", default: false },
+  writeBoundary: { type: "string", enum: WRITE_BOUNDARIES },
+  writeTargets: { type: "array", items: { oneOf: [{ type: "string" }, { type: "object" }] } },
+  workerLifecycle: { type: "string", enum: WORKER_LIFECYCLES, default: "ephemeral" },
+  contextPolicy: { type: "string", enum: CONTEXT_POLICIES },
+  runtimePreference: { type: "string", enum: RUNTIME_PREFERENCES, default: "auto" },
+  continuityRequired: { type: "boolean", default: false },
+  dependsOn: {
+    type: "array",
+    items: { type: "string" },
+    description: "Intentional DAG dependencies. [] means parallel-ready; omission is rejected by strict multi-lane plans.",
+  },
+  dependencyReasons: {
+    type: "object",
+    additionalProperties: { type: "string" },
+    description: "Why each dependency must be serial. List-order alone is not a valid reason.",
+  },
+  inputContracts: { type: "array", items: { oneOf: [{ type: "string" }, { type: "object" }] } },
+  outputContracts: { type: "array", items: { oneOf: [{ type: "string" }, { type: "object" }] } },
+  externalInputs: { type: "array", items: { oneOf: [{ type: "string" }, { type: "object" }] } },
+  handoffRisk: { type: "string", enum: HANDOFF_RISKS },
+  handoffMode: { type: "string", enum: HANDOFF_MODES },
+  handoffContract: { oneOf: [{ type: "object" }, { type: "array" }] },
+  verificationScope: { type: "string", enum: VERIFY_SCOPES },
+  capabilityRequirements: { type: "array", items: { type: "string" } },
+  capabilityNeeds: { oneOf: [{ type: "string" }, { type: "array" }, { type: "object" }] },
+  estimatedEffort: { type: "number", exclusiveMinimum: 0 },
 };
 
 const semanticItemSchema = {
@@ -564,6 +632,23 @@ const verificationResultSchema = {
 
 const tools = [
   {
+    name: "task_controller_plan_orchestration",
+    title: "KY-TASK: Plan Work Orchestration",
+    description: "Read-only first-class orchestration plan. Separates parallel frontiers from justified serial edges, validates semantic ownership and handoffs, and matches capabilities per lane before runtime selection.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        laneDefinitions: { type: "array", minItems: 1, items: { type: "object", properties: orchestrationLaneProperties, required: ["name"] } },
+        orchestrationPolicy: { type: "string", enum: ORCHESTRATION_POLICIES, default: "strict" },
+        activeCapabilityIds: { type: "array", items: { type: "string" }, default: [] },
+        availableCapabilities: { type: "array", items: availableCapabilitySchema, default: [] },
+        runtimeAvailability: { type: "object", additionalProperties: { type: "boolean" }, default: {} },
+      },
+      required: ["laneDefinitions"],
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
     name: "task_controller_compile_blueprint",
     title: "KY-TASK: Compile TaskBlueprint",
     description: "Read-only deterministic TaskBlueprint-to-contractSpec projection with digest and traceability.",
@@ -601,6 +686,7 @@ const tools = [
       properties: {
         taskBlueprint: taskBlueprintSchema,
         activeCapabilityIds: { type: "array", items: { type: "string" }, default: [] },
+        availableCapabilities: { type: "array", items: availableCapabilitySchema, default: [] },
         runtimeAvailability: { type: "object", additionalProperties: { type: "boolean" }, default: {} },
       },
       required: ["taskBlueprint"],
@@ -635,23 +721,11 @@ const tools = [
           description: "Explicit lane definitions. Takes precedence over lanes.",
           items: {
             type: "object",
-            properties: {
-              name: { type: "string" },
-              kind: { type: "string" },
-              workerRequired: { type: "boolean", default: false },
-              writeBoundary: { type: "string", enum: WRITE_BOUNDARIES },
-              workerLifecycle: { type: "string", enum: WORKER_LIFECYCLES, default: "ephemeral" },
-              contextPolicy: { type: "string", enum: CONTEXT_POLICIES },
-              runtimePreference: { type: "string", enum: RUNTIME_PREFERENCES, default: "auto" },
-              dependsOn: {
-                type: "array",
-                items: { type: "string" },
-                description: "Explicit DAG dependencies. An empty array makes the lane immediately parallel-ready.",
-              },
-            },
+            properties: orchestrationLaneProperties,
             required: ["name"],
           },
         },
+        availableCapabilities: { type: "array", items: availableCapabilitySchema, default: [] },
         force: { type: "boolean", default: false },
       },
       required: ["statePath", "goal"],
@@ -730,6 +804,23 @@ const tools = [
           items: { type: "string" },
           description: "Explicit dependencies; [] marks the inserted lane independent of earlier lanes.",
         },
+        purpose: orchestrationLaneProperties.purpose,
+        contributionRole: orchestrationLaneProperties.contributionRole,
+        semanticAuthority: orchestrationLaneProperties.semanticAuthority,
+        semanticOwner: orchestrationLaneProperties.semanticOwner,
+        dependencyReasons: orchestrationLaneProperties.dependencyReasons,
+        inputContracts: orchestrationLaneProperties.inputContracts,
+        outputContracts: orchestrationLaneProperties.outputContracts,
+        externalInputs: orchestrationLaneProperties.externalInputs,
+        writeTargets: orchestrationLaneProperties.writeTargets,
+        handoffRisk: orchestrationLaneProperties.handoffRisk,
+        handoffMode: orchestrationLaneProperties.handoffMode,
+        handoffContract: orchestrationLaneProperties.handoffContract,
+        verificationScope: orchestrationLaneProperties.verificationScope,
+        capabilityRequirements: orchestrationLaneProperties.capabilityRequirements,
+        capabilityNeeds: orchestrationLaneProperties.capabilityNeeds,
+        estimatedEffort: orchestrationLaneProperties.estimatedEffort,
+        continuityRequired: orchestrationLaneProperties.continuityRequired,
         status: { type: "string", enum: ["pending", "running", "done", "needs-work", "blocked", "stale"], default: "pending" },
         artifact: { type: "string", default: "" },
         decision: { type: "string", enum: ["", "pass", "needs-work", "blocked"], default: "" },
@@ -1125,6 +1216,34 @@ async function handleToolCall(id, params) {
   const args = params?.arguments ?? {};
   const argv = [];
 
+  if (name === "task_controller_plan_orchestration") {
+    if (!Array.isArray(args.laneDefinitions) || args.laneDefinitions.length === 0) {
+      throw new Error("laneDefinitions must be a non-empty array.");
+    }
+    if (args.activeCapabilityIds !== undefined && !Array.isArray(args.activeCapabilityIds)) {
+      throw new Error("activeCapabilityIds must be an array.");
+    }
+    if (args.availableCapabilities !== undefined && !Array.isArray(args.availableCapabilities)) {
+      throw new Error("availableCapabilities must be an array.");
+    }
+    if (args.runtimeAvailability !== undefined && (
+      args.runtimeAvailability === null || typeof args.runtimeAvailability !== "object"
+      || Array.isArray(args.runtimeAvailability)
+      || Object.values(args.runtimeAvailability).some((value) => typeof value !== "boolean")
+    )) {
+      throw new Error("runtimeAvailability must be an object with boolean values.");
+    }
+    const planArgs = ["--lane-definitions", JSON.stringify(args.laneDefinitions)];
+    pushString(planArgs, "--orchestration-policy", args.orchestrationPolicy);
+    if (args.activeCapabilityIds?.length) {
+      planArgs.push("--active-capability-ids", args.activeCapabilityIds.map((item) => requireString(item, "activeCapabilityIds item")).join(","));
+    }
+    if (args.availableCapabilities !== undefined) planArgs.push("--available-capabilities", JSON.stringify(args.availableCapabilities));
+    if (args.runtimeAvailability !== undefined) planArgs.push("--runtime-availability", JSON.stringify(args.runtimeAvailability));
+    readOnlyToolResult(id, "plan-orchestration", planArgs);
+    return;
+  }
+
   if (name === "task_controller_compile_blueprint") {
     if (!args.taskBlueprint || typeof args.taskBlueprint !== "object" || Array.isArray(args.taskBlueprint)) {
       throw new Error("taskBlueprint must be an object.");
@@ -1186,6 +1305,10 @@ async function handleToolCall(id, params) {
       planArgs.push("--active-capability-ids", args.activeCapabilityIds.map((item) => requireString(item, "activeCapabilityIds item")).join(","));
     }
     if (args.runtimeAvailability !== undefined) planArgs.push("--runtime-availability", JSON.stringify(args.runtimeAvailability));
+    if (args.availableCapabilities !== undefined) {
+      if (!Array.isArray(args.availableCapabilities)) throw new Error("availableCapabilities must be an array.");
+      planArgs.push("--available-capabilities", JSON.stringify(args.availableCapabilities));
+    }
     readOnlyToolResult(id, "plan-blueprint", planArgs);
     return;
   }
@@ -1212,6 +1335,10 @@ async function handleToolCall(id, params) {
       if (args.activeCapabilityIds.length) {
         argv.push("--active-capability-ids", args.activeCapabilityIds.map((item) => requireString(item, "activeCapabilityIds item")).join(","));
       }
+    }
+    if (args.availableCapabilities !== undefined) {
+      if (!Array.isArray(args.availableCapabilities)) throw new Error("availableCapabilities must be an array.");
+      argv.push("--available-capabilities", JSON.stringify(args.availableCapabilities));
     }
     if (Array.isArray(args.lanes) && args.lanes.length > 0) {
       argv.push("--lanes", args.lanes.map((lane) => requireString(lane, "lane")).join(","));
@@ -1260,6 +1387,25 @@ async function handleToolCall(id, params) {
       if (args.dependsOn.length === 0) argv.push("--independent");
       else argv.push("--depends-on", args.dependsOn.map((lane) => requireString(lane, "dependsOn lane")).join(","));
     }
+    pushString(argv, "--purpose", args.purpose);
+    pushString(argv, "--contribution-role", args.contributionRole);
+    pushString(argv, "--semantic-authority", args.semanticAuthority);
+    if (args.semanticOwner === true) argv.push("--semantic-owner");
+    if (args.dependencyReasons !== undefined) argv.push("--dependency-reasons", JSON.stringify(args.dependencyReasons));
+    if (args.inputContracts !== undefined) argv.push("--input-contracts", JSON.stringify(args.inputContracts));
+    if (args.outputContracts !== undefined) argv.push("--output-contracts", JSON.stringify(args.outputContracts));
+    if (args.externalInputs !== undefined) argv.push("--external-inputs", JSON.stringify(args.externalInputs));
+    if (args.writeTargets !== undefined) argv.push("--write-targets", JSON.stringify(args.writeTargets));
+    pushString(argv, "--handoff-risk", args.handoffRisk);
+    pushString(argv, "--handoff-mode", args.handoffMode);
+    if (args.handoffContract !== undefined) argv.push("--handoff-contract", JSON.stringify(args.handoffContract));
+    pushString(argv, "--verification-scope", args.verificationScope);
+    if (Array.isArray(args.capabilityRequirements) && args.capabilityRequirements.length) {
+      argv.push("--capability-requirements", args.capabilityRequirements.map((item) => requireString(item, "capabilityRequirements item")).join(","));
+    }
+    if (args.capabilityNeeds !== undefined) argv.push("--capability-needs", JSON.stringify(args.capabilityNeeds));
+    if (typeof args.estimatedEffort === "number" && args.estimatedEffort > 0) argv.push("--estimated-effort", String(args.estimatedEffort));
+    if (args.continuityRequired === true) argv.push("--continuity-required");
     pushString(argv, "--status", args.status);
     pushString(argv, "--artifact", args.artifact);
     pushString(argv, "--decision", args.decision);

@@ -11,6 +11,7 @@ Complex work often fails when research, design, implementation, and review share
 KY-TASK addresses those failure modes with:
 
 - explicit goals, boundaries, deliverables, and acceptance gates;
+- first-class work orchestration that separates decomposition, parallel/serial planning, per-lane capability matching, and runtime selection;
 - visible native Codex Sessions for distributed work instead of silent Sub Agent fallback;
 - dependency-aware concurrency, capped at four workers by default;
 - required saved-project affinity for every worker Session;
@@ -20,6 +21,7 @@ KY-TASK addresses those failure modes with:
 - atomic feedback ingestion that opens contract corrections, stales approvals, and blocks execution when the user says the commercial logic is wrong;
 - a shared worker-runtime profile registry for capability-based selection and audit binding;
 - an extensible registry for document, spreadsheet, deck, Lark, and code capabilities.
+- a generic strict orchestration path when no scenario pack matches, without adding domain exceptions or falling back to a fixed five-lane template.
 
 ## Safe defaults
 
@@ -47,7 +49,7 @@ Start a new Codex task after installation so that skills and MCP tools are loade
 ## Usage
 
 ```text
-Use KY-TASK for this complex task. Lock the task boundary, execute independent lanes in project-scoped Sessions, and finish with independent verification.
+Use KY-TASK for this complex task. Lock the boundary; plan one semantic owner, the primary path, parallel waves, justified serial edges, join points, and per-lane capabilities; then execute the accepted graph in project-scoped Sessions and finish with independent verification.
 ```
 
 Small explanations, narrow single-file edits, and low-ambiguity work can still run directly. Multi-Session execution is a strategy for complex work, not mandatory ceremony for every request.

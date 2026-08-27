@@ -1,6 +1,6 @@
 {
   "name": "task-controller",
-  "version": "0.5.0+codex.20260813174654",
+  "version": "0.6.0+codex.20260827103424",
   "description": "Task boundary planning plus KY-TASK controller protocol for gated multi-lane Codex execution.",
   "author": {
     "name": "Zhuanz"
@@ -10,7 +10,7 @@
   "interface": {
     "displayName": "KY-TASK",
     "shortDescription": "\u4efb\u52a1\u5b9a\u754c + lane / worker \u603b\u63a7\u6267\u884c\u3002",
-    "longDescription": "KY-TASK bundles task-boundary-planner with a controller protocol and runtime adapter: lock a task contract, govern high-impact commercial decisions, resolve and preserve Codex project affinity, define evidence and acceptance gates, split professional lanes, create project-scoped native Session workers for dependency-ready batches, run up to four independent lanes concurrently, ingest user corrections, preserve write boundaries, record callbacks, block unsafe transitions, and verify final outputs.",
+    "longDescription": "KY-TASK bundles task-boundary-planner with a controller protocol and runtime adapter: lock a task contract, compile one semantic owner and an explicit OrchestrationPlan, separate parallel waves from justified serial edges, match capabilities per lane, govern high-impact commercial decisions, preserve Codex project affinity, create project-scoped native Session workers for dependency-ready batches, ingest corrections, preserve write boundaries, record callbacks, and independently verify final outputs.",
     "developerName": "Zhuanz",
     "category": "Productivity",
     "capabilities": [
@@ -18,7 +18,7 @@
       "Write"
     ],
     "defaultPrompt": [
-      "\u7528 KY-TASK \u5148\u8f93\u51fa\u62c6\u5206\u5224\u65ad\uff0c\u518d\u5b9a\u4efb\u52a1\u8fb9\u754c\u548c lanes\u3002",
+      "\u7528 KY-TASK \u5148\u5b9a\u4efb\u52a1\u8fb9\u754c\uff0c\u518d\u4e25\u683c\u7f16\u6392 semantic owner\u3001\u4e3b\u8def\u5f84\u3001\u5e76\u884c\u6ce2\u6b21\u3001\u4e32\u884c\u539f\u56e0\u548c\u9010 Lane \u80fd\u529b\uff0c\u901a\u8fc7\u540e\u624d\u521b\u5efa Session\u3002",
       "\u7ee7\u7eed\u6267\u884c\u4e0b\u4e00\u6761\u5df2\u6279\u51c6\u7684 lane\u3002",
       "\u6309 KY-TASK \u5951\u7ea6\u68c0\u67e5\u8fd9\u6b21\u6267\u884c\u6709\u6ca1\u6709\u8dd1\u504f\u3002"
     ]

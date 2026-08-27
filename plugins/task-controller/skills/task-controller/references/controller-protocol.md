@@ -11,6 +11,12 @@ Use this reference when a task needs a controller rather than a single uninterru
 - Ensure only the approved lane writes to external systems.
 - Run final review against the original task, not against what happened to be built.
 
+Before choosing a runtime, compile the lane map through
+`work-orchestration.md`. The controller must distinguish decomposition from
+orchestration: lane titles identify jobs, while the `OrchestrationPlan` proves
+semantic ownership, parallel waves, justified serial edges, join points,
+handoff cohesion, and lane-level capability bindings.
+
 ## Execution Modes
 
 ### Single-thread lanes
@@ -88,7 +94,9 @@ Blueprint-backed semantic-strict corrections must revise through `revise-contrac
 
 ## SolutionGraph Planning and Packets
 
-`plan-blueprint --task-blueprint` is a pure read-only planning command. It compiles the blueprint contract, performs shadow routing, loads the selected checked-in scenario pack, builds a formal `SolutionGraph`, projects controller lanes, and compiles one `WorkerPacket` per graph node. Its result contains `routingDecision`, `solutionGraph`, `laneProjection`, `workerPackets`, `planDigest`, `planExecutable`, and blockers. Planning never creates or dispatches workers.
+`plan-orchestration --lane-definitions` is the generic read-only path. In strict mode it rejects missing semantic ownership, unexplained serialization, premature verification, lossy primary handoffs, shared parallel writers, and unavailable exact lane capabilities. It emits waves and join points before any Session/runtime choice.
+
+`plan-blueprint --task-blueprint` is a pure read-only planning command. It compiles the blueprint contract, performs shadow routing, loads the selected checked-in scenario pack, builds a formal `SolutionGraph`, compiles its `OrchestrationPlan`, projects controller lanes, and compiles one `WorkerPacket` per graph node. Its result contains `routingDecision`, `solutionGraph`, `orchestrationPlan`, `laneProjection`, `workerPackets`, `planDigest`, `planExecutable`, and blockers. Planning never creates or dispatches workers.
 
 Use `init --task-blueprint --auto-plan` to persist a graph-backed state. With no explicit `laneDefinitions`, the projected lane order, names, and boundaries become the state lanes. Explicit definitions must match that projection. The state stores the routing decision, graph and digest, node-indexed packets, and plan identity. A semantic-strict risk initialization fails when the plan is not executable.
 

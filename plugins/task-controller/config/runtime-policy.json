@@ -1,6 +1,7 @@
 {
   "policyVersion": "1.1",
   "runtimeSelectionPolicy": "native_session_required",
+  "orchestrationPolicy": "strict",
   "nativeThreadUserApproved": false,
   "maxParallelWorkers": 4,
   "projectAffinityPolicy": "inherit_or_resolve_required",

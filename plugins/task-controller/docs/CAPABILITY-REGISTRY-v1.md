@@ -1,6 +1,6 @@
 # Capability Registry v1
 
-Status: proposed contract
+Status: checked-in registry plus lane-level orchestration routing implemented; richer dynamic metadata remains incremental
 Purpose: allow KY-TASK to discover, compare, route, and verify skills and tools without embedding every domain implementation in the controller.
 
 ## 1. Architecture Position
@@ -112,6 +112,16 @@ router.explain(RoutingDecision) -> selected/rejected/fallback reasons
 ```
 
 The MCP surface should expose read-only discovery and explanation first. Write execution remains in the controller dispatcher, not the registry.
+
+### Lane-level routing
+
+Scenario routing selects a reusable workflow pattern. It does not justify using
+the same capability for every node. `OrchestrationPlan.capabilityRoutes` matches
+each lane from its professional purpose, input/output contracts, semantic or
+verification authority, write boundary, and exact capability requirements.
+Unknown active skill IDs may be supplied explicitly as available capabilities;
+suggestions remain advisory until the controller binds one. Runtime selection
+occurs only after these lane routes and the work graph pass.
 
 ## 3. Risk Scale
 

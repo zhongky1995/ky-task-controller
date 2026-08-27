@@ -1,6 +1,6 @@
 interface:
   display_name: "Task Boundary Planner"
   short_description: "Generate reliable task contracts"
-  default_prompt: "Use $task-boundary-planner to generate a task contract before execution. Include final vs phase deliverables, delivery/use mode, object model, evidence status, professional standards, production/tool boundaries, capacity limits, execution trigger, distributed-worker handoff plan, per-lane lifecycle/context policy, and acceptance criteria. For operating dashboards or Feishu/Base management systems, define the management user path and dashboard unit contract before implementation. Do not execute during the planning response. After I confirm, continue into the next gated execution lane instead of replanning."
+  default_prompt: "Use $task-boundary-planner to generate a task contract before execution. Include final vs phase deliverables, delivery/use mode, object model, evidence status, professional standards, production/tool boundaries, capacity limits, and acceptance criteria. For composite work, separately plan decomposition, orchestration, lane-level capability matching, and runtime: one semantic owner, a primary path, explicit parallel waves, justified serial edges, join points, and handoff-loss decisions. Do not use a fixed five-lane template or execute during the planning response. After I confirm, continue into the next gated execution wave instead of replanning."
 policy:
   allow_implicit_invocation: true

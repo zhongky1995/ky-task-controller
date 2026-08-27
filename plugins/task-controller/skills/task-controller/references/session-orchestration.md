@@ -8,6 +8,11 @@ For every distributed Codex Desktop worker Session, also apply `codex-thread-ada
 
 Split by professional work type and write risk, not by convenience.
 
+Session dispatch is downstream of work orchestration. First apply
+`work-orchestration.md` and pass a strict `OrchestrationPlan`; only then use this
+reference to place accepted lanes into worker Sessions. Never use Session
+creation itself as the decomposition method.
+
 KY-TASK follows the KY-style controller/lane pattern:
 
 - `KY-TASK00-总控-任务伙伴` is the only fixed user-facing role.
@@ -212,6 +217,9 @@ role_map:
   each_lane:
     title:
     responsibility:
+    contribution_role: primary | prerequisite | supporting | verification
+    semantic_authority: define | constrain | implement | define-and-implement | verify
+    semantic_owner: true | false
     input_materials:
     output_artifacts:
     tool_profile:
@@ -220,6 +228,12 @@ role_map:
     context_policy: packet_only | checkpoint_delta
     runtime_preference: auto | managed_agent_worker | native_thread_lane
     depends_on: [] | [upstream lane names]
+    dependency_reasons:
+    input_contracts:
+    output_contracts:
+    handoff_risk: low | medium | high
+    handoff_mode: same-lane | artifact-contract | independent
+    capability_requirements:
     lane_runtime: managed_agent_worker | native_thread_lane | single_thread_section | thread_create_unavailable
     write_scope:
     forbidden_actions:
@@ -324,11 +338,20 @@ When the task is in `distributed` mode, both ephemeral and persistent lanes use 
 
 - Every new lane declares `dependsOn`; `[]` means immediately ready.
 - Missing `dependsOn` is legacy ordered-lane behavior and must not be used for new plans.
+- Every serial edge in a strict plan declares why it is serial. List order is not a reason.
+- Parallel siblings expose output contracts and a downstream join point; different job titles alone do not prove independence.
+- Verification consumes the decision, sample, readback, or artifact it judges. It cannot run early and then dictate an artifact that does not yet exist.
+- Build the primary semantic path first, then attach prerequisite/supporting work whose outputs it actually consumes.
 - Dispatch all lanes returned by `task_controller_ready_lanes` before waiting.
 - Default concurrency is four Sessions; never exceed `executionPolicy.maxParallelWorkers`.
 - Do not add a dependency only to make the diagram tidy. Add it only when a lane consumes the upstream artifact, shares a write target, or must wait for approval.
 - Lanes that can read the same immutable source independently should normally be siblings in the same frontier.
 - Writers to the same durable target are never parallel. Review depends on every writer it must cover.
+
+Before dispatch, call `task_controller_plan_orchestration`. If it returns
+`orchestrationExecutable: false`, do not create worker Sessions. Repair the lane
+graph first. When no scenario pack matched, this generic strict plan is the
+required path; do not fall back to the example five-lane sequence.
 
 Do not register execution lanes as `single_thread_section` just because the change is small or described as "repair". A repair that writes to an external artifact has the same isolation requirement as implementation.
 

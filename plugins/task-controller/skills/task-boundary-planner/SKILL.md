@@ -21,6 +21,7 @@ For complex tasks, produce a compact `任务契约 v0` before substantial execut
 - Ask at most 2 questions in the first pass, only for blocking unknowns that change direction, risk, or acceptance.
 - Classify unknowns as blocking, assumable, or observable.
 - Decide whether the request is a single task or a composite task chain.
+- For a composite task, keep decomposition, orchestration, capability matching, and runtime selection as four separate decisions. Do not derive parallel/serial order from the lane list.
 - Treat explicit `$task-boundary-planner` invocation as planning-only by default: do not modify final artifacts, update external documents, generate polished deliverables, launch background sessions, or perform broad execution in the same response.
 - Treat a later user message such as "继续", "进执行", "按这个执行", "优化吧", or "开始做" after a locked contract as an execution trigger unless the same message says not to execute.
 - On execution-trigger turns, do not repeat the full contract. Identify the next lane, restate its write boundary, execute only that lane or the approved execution phase, leave an intermediate artifact/checkpoint, and state whether the final deliverable is complete.
@@ -47,9 +48,10 @@ Use this sequence for complex tasks:
 7. Task contract: output `任务契约 v0`, including assumptions and non-goals.
 8. Unit contract: if the final deliverable has pages, sections, modules, scenes, scripts, charts, or files, define the per-unit gate before production.
 9. Production path: choose the build method and tool boundary; name what must be deterministic, what can be generative, and what needs human-visible review.
-10. Execution trigger and handoff: define what user confirmation, tool permission, execution lane split, or lane handoff is required before production starts.
-11. Verification: check final-deliverable acceptance, delivery-mode fit, upstream layer standards, unit gates, production-path risks, and capacity limits.
-12. Change control: decide whether new information is a local correction, evidence supplement, expression adjustment, delivery-mode correction, tool-path correction, or contract change.
+10. Work orchestration: identify one semantic owner, primary/prerequisite/supporting/verification roles, parallel waves, justified serial edges, join points, and handoff-loss decisions.
+11. Execution trigger and handoff: match capabilities per lane, then define what user confirmation, tool permission, lifecycle, runtime, or lane handoff is required before production starts.
+12. Verification: check final-deliverable acceptance, delivery-mode fit, upstream layer standards, unit gates, production-path risks, and capacity limits.
+13. Change control: decide whether new information is a local correction, evidence supplement, expression adjustment, delivery-mode correction, tool-path correction, or contract change.
 
 If the contract already exists and the user has just confirmed execution, start at step 10 and dispatch the next dependency-ready lane batch. Do not go back to step 1 unless a change trigger fires.
 
@@ -142,6 +144,7 @@ Rules:
 - If the next lane writes to Feishu/Base/docs/decks/workbooks/code or customer-facing artifacts, verify that all upstream lane gates required by the contract exist.
 - If upstream gates are missing, do not write the final artifact. Produce the missing lane artifact instead and say what must pass before implementation.
 - If the user explicitly approved a full execution package, continue lane by lane, but still preserve intermediate outputs and do not merge review into implementation.
+- Before choosing Sessions or sequential execution for a composite task, compile a strict work orchestration plan. QA/review must depend on the decision, sample, or artifact it judges; high-loss design/production work stays together unless a concrete handoff contract exists.
 - If mandatory distributed-execution rules are hit, first check native Codex Session tools. Under the Session-first policy, hand off the dependency-ready batch to visible Session workers rather than managed subagents or sequential current-thread lanes.
 - Use sequential lanes only after recording that independent worker runtimes are unavailable, the user rejects background worker execution, or the turn is planning-only with no final write.
 - End each execution response with one of: `当前 lane 完成，等待确认进入下一 lane`; `当前 lane 完成，已按已批准流程继续`; `最终交付物完成`; or `阻塞，缺少...`.
@@ -158,6 +161,7 @@ Keep the main contract lightweight:
 - If the user has already complained that prior execution failed because it did not split, later confirmations such as `继续`, `好`, `进执行`, `按这个做`, or `优化吧` count as approval to continue the split plan. Do not require the user to request workers again in the next turn.
 - Do not dispatch workers or open sidebar-visible tasks during planning-only mode.
 - Distributed execution proceeds only after the user confirms execution. The open-source distribution has no standing approval; list the planned Sessions, obtain task-scoped approval, and record it before dispatch.
+- Read `../task-controller/references/work-orchestration.md` before producing any new composite lane map. If KY-TASK tools are active, call `task_controller_plan_orchestration` and clear every strict blocker before runtime selection.
 - Read `references/execution-handoff.md` when recommending distributed execution, separate Codex threads, background workers, or detailed handoff prompts.
 
 ## Professional Lens Routing
@@ -246,6 +250,9 @@ For composite tasks:
 - Prerequisite acceptance criteria come from upstream evidence layers.
 - Do not let an upstream layer dominate the task if it is only evidence for the final deliverable.
 - Do not skip an upstream layer if the final deliverable would become unsupported without it.
+- Build the primary semantic path first. Add prerequisite/supporting work only when its output is consumed by that path.
+- Mark exactly one primary lane as semantic owner. A clean worker Session cannot repair missing or conflicting ownership.
+- Independent lanes share a wave only when neither consumes the other, neither verifies the other's future output, and they have a declared downstream join point.
 
 Every phase must name:
 
@@ -254,6 +261,8 @@ Every phase must name:
 - Professional standard.
 - Gate to proceed.
 - Final-deliverable dependency.
+- Contribution role and semantic authority.
+- Output contract, downstream consumer, and dependency reason.
 
 ## Delivery Mode Gate
 
@@ -474,6 +483,9 @@ When the user cites a prior thread, failed run, or unsatisfactory skill use:
 - If professional lens is unclear, choose the likely lens and mark it as an assumption; do not proceed with only generic task-type labels.
 - If delivery mode is ambiguous and likely changes layout, density, packaging, or verification, infer the likely primary mode and mark it as an assumption before production.
 - If the task is composite but only one layer is planned, stop and map the missing layers.
+- If composite lanes have no explicit semantic owner, dependency reasons, parallel waves, or join points, stop and compile the work orchestration plan before runtime selection.
+- If QA/review precedes the artifact it judges, or implementation depends on that premature QA, reject and re-orchestrate the lane map.
+- If design and production are split despite high handoff loss, combine them or define a concrete artifact handoff contract.
 - If the final deliverable is unit-based but unit gates are missing, stop before polished production and create the unit contract.
 - If the production path can corrupt the evidence, wording, layout, or executable behavior required by the professional standard, stop before polished production and define a safer path or a preview-only role for that tool.
 - If a key claim is only partially supported, use safe wording or make evidence acquisition the next phase.

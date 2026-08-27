@@ -11,6 +11,7 @@ import os
 import sys
 import tempfile
 from contextlib import contextmanager
+from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -29,6 +30,15 @@ from control_plane.decision_governance import (
     apply_scenario_policy,
     classify_feedback,
     derive_decision_governance,
+)
+from control_plane.orchestration import (
+    CONTRIBUTION_ROLES,
+    HANDOFF_MODES,
+    HANDOFF_RISKS,
+    ORCHESTRATION_POLICIES,
+    SEMANTIC_AUTHORITIES,
+    VERIFY_SCOPES,
+    compile_orchestration_plan,
 )
 from control_plane.solution_graph import build_solution_graph, projection_to_lane_definitions, validate_solution_graph
 from control_plane.worker_packet import compile_worker_packets, render_worker_prompt, validate_worker_packet
@@ -77,6 +87,7 @@ PROJECT_RESOLUTION_SOURCES = {
     "user_selected",
 }
 PROJECT_ENVIRONMENTS = {"local", "worktree"}
+DEFAULT_ORCHESTRATION_POLICY = "strict"
 DEFAULT_MAX_PARALLEL_WORKERS = 4
 MAX_PARALLEL_WORKERS = 8
 ENFORCEMENT_MODES = {"workflow_only", "semantic_strict"}
@@ -653,6 +664,46 @@ def route_capabilities(args: argparse.Namespace) -> None:
     print(json.dumps(route, ensure_ascii=False, indent=2))
 
 
+def available_capability_catalog(value: str) -> list[dict[str, Any]]:
+    raw = load_json_value(value) if value else []
+    if not isinstance(raw, list) or any(
+        not isinstance(item, (str, dict)) for item in raw
+    ):
+        fail("availableCapabilities must be a JSON array of IDs or capability objects.")
+    result: list[dict[str, Any]] = []
+    for item in raw:
+        if isinstance(item, str):
+            if not item.strip():
+                fail("availableCapabilities IDs must be non-empty strings.")
+            result.append({"id": item.strip()})
+            continue
+        capability_id = item.get("id", item.get("capabilityId"))
+        if not isinstance(capability_id, str) or not capability_id.strip():
+            fail("availableCapabilities objects require a non-empty id.")
+        result.append(item)
+    return result
+
+
+def plan_orchestration_command(args: argparse.Namespace) -> None:
+    lanes = load_json_value(args.lane_definitions)
+    runtime_availability = load_json_value(args.runtime_availability)
+    if not isinstance(runtime_availability, dict) or not all(
+        isinstance(value, bool) for value in runtime_availability.values()
+    ):
+        fail("runtime availability must be a JSON object with boolean values.")
+    try:
+        plan = compile_orchestration_plan(
+            lanes,
+            policy=args.orchestration_policy,
+            active_capability_ids=parse_csv(args.active_capability_ids) or None,
+            runtime_availability=runtime_availability,
+            available_capabilities=available_capability_catalog(args.available_capabilities),
+        )
+    except ValueError as error:
+        fail(str(error))
+    print(json.dumps(plan, ensure_ascii=False, indent=2))
+
+
 def controller_lane_projection(projection: dict[str, Any]) -> dict[str, Any]:
     """Translate SolutionGraph's read-only ``none`` boundary for state lanes."""
     result = json.loads(json.dumps(projection))
@@ -671,6 +722,7 @@ def plan_blueprint_data(
     *,
     runtime_availability: dict[str, Any] | None = None,
     active_capability_ids: list[str] | None = None,
+    available_capabilities: list[dict[str, Any]] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]:
     """Build a read-only graph plan and return its internal compiler projection."""
     blueprint = validate_blueprint(raw_blueprint)
@@ -685,6 +737,7 @@ def plan_blueprint_data(
     solution_graph: dict[str, Any] | None = None
     lane_projection: dict[str, Any] = {"laneDefinitions": [], "mapping": []}
     packets: list[dict[str, Any]] = []
+    orchestration_plan: dict[str, Any] | None = None
     compiled: dict[str, Any] | None = None
     policy_applications: list[dict[str, Any]] = []
     scenario = routing.get("scenarioPack")
@@ -727,6 +780,16 @@ def plan_blueprint_data(
             graph_for_projection["graphExecutable"] = True
             graph_for_projection["graphDigest"] = ""
         lane_projection = controller_lane_projection(projection_to_lane_definitions(graph_for_projection))
+        orchestration_plan = compile_orchestration_plan(
+            lane_projection["laneDefinitions"],
+            policy="strict",
+            trusted=True,
+            active_capability_ids=active_capability_ids,
+            runtime_availability=runtime_availability,
+            available_capabilities=available_capabilities,
+        )
+        for blocker in orchestration_plan.get("blockers", []):
+            blockers.append({"stage": "orchestration", **blocker})
         _, compiled = compile_task_blueprint(blueprint, lane_projection["laneDefinitions"])
         for required in compiled.get("requiredUnmapped", []):
             blockers.append({"stage": "compile", "id": required, "reason": "required blueprint content is unmapped"})
@@ -739,12 +802,15 @@ def plan_blueprint_data(
         and solution_graph.get("graphExecutable")
         and compiled
         and compiled.get("compiledExecutable")
+        and orchestration_plan
+        and orchestration_plan.get("orchestrationExecutable")
         and not blockers
     )
     plan = {
         "routingDecision": routing,
         "solutionGraph": solution_graph,
         "laneProjection": lane_projection,
+        "orchestrationPlan": orchestration_plan,
         "workerPackets": packets,
         "policyApplications": policy_applications,
         "planDigest": "",
@@ -765,6 +831,7 @@ def plan_blueprint_command(args: argparse.Namespace) -> None:
         load_json_value(args.task_blueprint),
         runtime_availability=runtime_availability,
         active_capability_ids=parse_csv(args.active_capability_ids) or None,
+        available_capabilities=available_capability_catalog(args.available_capabilities),
     )
     print(json.dumps(plan, ensure_ascii=False, indent=2))
 
@@ -1487,6 +1554,7 @@ def load_runtime_defaults() -> dict[str, Any]:
     path = PLUGIN_ROOT / "config" / "runtime-policy.json"
     fallback = {
         "runtimeSelectionPolicy": "lane_lifecycle",
+        "orchestrationPolicy": DEFAULT_ORCHESTRATION_POLICY,
         "nativeThreadUserApproved": False,
         "maxParallelWorkers": DEFAULT_MAX_PARALLEL_WORKERS,
         "projectAffinityPolicy": "allow_projectless",
@@ -1514,6 +1582,24 @@ def make_lane(
     context_policy: str = "",
     runtime_preference: str = "auto",
     depends_on: Any = None,
+    purpose: str = "",
+    contribution_role: str = "",
+    semantic_authority: str = "",
+    semantic_owner: bool = False,
+    dependency_reasons: Any = None,
+    input_contracts: Any = None,
+    output_contracts: Any = None,
+    external_inputs: Any = None,
+    write_targets: Any = None,
+    handoff_risk: str = "",
+    handoff_mode: str = "",
+    handoff_contract: Any = None,
+    verification_scope: str = "",
+    capability_requirements: Any = None,
+    capability_needs: Any = None,
+    estimated_effort: Any = 1,
+    continuity_required: bool = False,
+    orchestration_declared: Any = None,
     status: str = "pending",
     artifact: str = "",
     decision: str = "",
@@ -1551,6 +1637,24 @@ def make_lane(
         "workerLifecycle": lifecycle,
         "contextPolicy": context,
         "runtimePreference": preference,
+        "purpose": purpose.strip() if isinstance(purpose, str) else "",
+        "contributionRole": contribution_role.strip() if isinstance(contribution_role, str) else "",
+        "semanticAuthority": semantic_authority.strip() if isinstance(semantic_authority, str) else "",
+        "semanticOwner": bool(semantic_owner),
+        "dependencyReasons": dependency_reasons if isinstance(dependency_reasons, (dict, list)) else {},
+        "inputContracts": input_contracts if isinstance(input_contracts, list) else [],
+        "outputContracts": output_contracts if isinstance(output_contracts, list) else [],
+        "externalInputs": external_inputs if isinstance(external_inputs, list) else [],
+        "writeTargets": write_targets if isinstance(write_targets, list) else [],
+        "handoffRisk": handoff_risk.strip() if isinstance(handoff_risk, str) else "",
+        "handoffMode": handoff_mode.strip() if isinstance(handoff_mode, str) else "",
+        "handoffContract": handoff_contract if isinstance(handoff_contract, (dict, list)) else {},
+        "verificationScope": verification_scope.strip() if isinstance(verification_scope, str) else "",
+        "capabilityRequirements": capability_requirements if isinstance(capability_requirements, list) else [],
+        "capabilityNeeds": capability_needs if isinstance(capability_needs, (list, dict, str)) else [],
+        "estimatedEffort": estimated_effort,
+        "continuityRequired": bool(continuity_required),
+        "orchestrationDeclared": orchestration_declared if isinstance(orchestration_declared, list) else [],
         "recommendedRuntime": "",
         "validForRevision": revision,
         "status": status,
@@ -1617,6 +1721,19 @@ def normalize_lane_definitions(
                 if "dependsOn" in metadata
                 else None
             )
+            orchestration_fields = (
+                "dependsOn", "purpose", "contributionRole", "semanticAuthority", "semanticOwner",
+                "dependencyReasons", "inputContracts", "outputContracts", "externalInputs",
+                "writeTargets", "handoffRisk", "handoffMode", "handoffContract",
+                "verificationScope", "capabilityRequirements", "capabilityNeeds",
+                "estimatedEffort", "continuityRequired",
+            )
+            orchestration_declared = list(dict.fromkeys(
+                list(definition.get("orchestrationDeclared", []))
+                + [field for field in orchestration_fields if field in definition or field in metadata]
+            ))
+            def lane_value(field: str, default: Any = None) -> Any:
+                return definition[field] if field in definition else metadata.get(field, default)
             lanes.append(
                 make_lane(
                     definition.get("name", ""),
@@ -1630,6 +1747,24 @@ def normalize_lane_definitions(
                     context_policy=definition.get("contextPolicy", ""),
                     runtime_preference=definition.get("runtimePreference", "auto"),
                     depends_on=depends_on,
+                    purpose=lane_value("purpose", ""),
+                    contribution_role=lane_value("contributionRole", ""),
+                    semantic_authority=lane_value("semanticAuthority", ""),
+                    semantic_owner=bool(lane_value("semanticOwner", False)),
+                    dependency_reasons=lane_value("dependencyReasons", {}),
+                    input_contracts=lane_value("inputContracts", []),
+                    output_contracts=lane_value("outputContracts", []),
+                    external_inputs=lane_value("externalInputs", []),
+                    write_targets=lane_value("writeTargets", []),
+                    handoff_risk=lane_value("handoffRisk", ""),
+                    handoff_mode=lane_value("handoffMode", ""),
+                    handoff_contract=lane_value("handoffContract", {}),
+                    verification_scope=lane_value("verificationScope", ""),
+                    capability_requirements=lane_value("capabilityRequirements", []),
+                    capability_needs=lane_value("capabilityNeeds", []),
+                    estimated_effort=lane_value("estimatedEffort", 1),
+                    continuity_required=bool(lane_value("continuityRequired", False)),
+                    orchestration_declared=orchestration_declared,
                     notes=definition.get("notes", ""),
                 )
             )
@@ -1693,6 +1828,11 @@ def normalize_execution_policy(raw: dict[str, Any], lanes: list[dict[str, Any]])
     )
     if selection_policy not in RUNTIME_SELECTION_POLICIES:
         fail(f"Unsupported runtimeSelectionPolicy: {selection_policy}")
+    orchestration_policy = raw.get(
+        "orchestrationPolicy", defaults.get("orchestrationPolicy", DEFAULT_ORCHESTRATION_POLICY)
+    )
+    if orchestration_policy not in ORCHESTRATION_POLICIES:
+        fail(f"Unsupported orchestrationPolicy: {orchestration_policy}")
     max_parallel_workers = raw.get(
         "maxParallelWorkers", defaults.get("maxParallelWorkers", DEFAULT_MAX_PARALLEL_WORKERS)
     )
@@ -1812,6 +1952,7 @@ def normalize_execution_policy(raw: dict[str, Any], lanes: list[dict[str, Any]])
         "requiredWorkerLanes": required_lanes,
         "independentReviewRequired": independent_review,
         "runtimeSelectionPolicy": selection_policy,
+        "orchestrationPolicy": orchestration_policy,
         "nativeThreadUserApproved": native_approved,
         "maxParallelWorkers": max_parallel_workers,
         "projectAffinityPolicy": project_affinity_policy,
@@ -1825,6 +1966,16 @@ def normalize_execution_policy(raw: dict[str, Any], lanes: list[dict[str, Any]])
         lane["workerRequired"] = lane["workerRequired"] or lane["name"] in required_set
         if lane["workerRequired"] and lane["name"] not in required_set:
             policy["requiredWorkerLanes"].append(lane["name"])
+    return policy
+
+
+def apply_runtime_selection(policy: dict[str, Any], lanes: list[dict[str, Any]]) -> None:
+    """Choose worker runtimes only after the work orchestration gate passes."""
+    eligible = policy["eligibleRuntimes"]
+    native_approved = policy["nativeThreadUserApproved"]
+    selection_policy = policy["runtimeSelectionPolicy"]
+    mode = policy["mode"]
+    for lane in lanes:
         lane["recommendedRuntime"] = recommended_runtime(
             lane,
             eligible,
@@ -1857,7 +2008,44 @@ def normalize_execution_policy(raw: dict[str, Any], lanes: list[dict[str, Any]])
                 f"Lane {lane['name']} requires an independent worker, but its "
                 "runtimePreference cannot be satisfied by the eligible runtimes."
             )
-    return policy
+
+
+def apply_orchestration_projection(lanes: list[dict[str, Any]], plan: dict[str, Any]) -> None:
+    """Persist semantic orchestration fields without changing legacy dependency semantics."""
+    planned = {lane["name"]: lane for lane in plan.get("lanes", []) if isinstance(lane, dict)}
+    routes = {route["lane"]: route for route in plan.get("capabilityRoutes", []) if isinstance(route, dict)}
+    wave_by_lane = {
+        lane_name: wave.get("wave", 0)
+        for wave in plan.get("waves", []) if isinstance(wave, dict)
+        for lane_name in wave.get("lanes", []) if isinstance(lane_name, str)
+    }
+    parallel_by_lane = {
+        lane_name: list(group)
+        for group in plan.get("parallelGroups", []) if isinstance(group, list)
+        for lane_name in group if isinstance(lane_name, str)
+    }
+    projection_fields = (
+        "purpose", "contributionRole", "semanticAuthority", "semanticOwner",
+        "dependencyReasons", "inputContracts", "outputContracts", "externalInputs",
+        "writeTargets", "handoffRisk", "handoffMode", "handoffContract",
+        "verificationScope", "capabilityRequirements", "capabilityNeeds",
+        "estimatedEffort", "continuityRequired", "orchestrationDeclared",
+    )
+    for lane in lanes:
+        source = planned.get(lane["name"])
+        if not source:
+            continue
+        for field in projection_fields:
+            lane[field] = deepcopy(source.get(field))
+        lane["effectiveDependsOn"] = list(source.get("dependsOn", []))
+        lane["orchestrationWave"] = wave_by_lane.get(lane["name"], 0)
+        lane["parallelGroup"] = parallel_by_lane.get(lane["name"], [])
+        route = routes.get(lane["name"], {})
+        lane["capabilityBindings"] = [
+            item.get("id") for item in route.get("selected", [])
+            if isinstance(item, dict) and isinstance(item.get("id"), str)
+        ]
+        lane["capabilityRouteStatus"] = route.get("status", "unbound")
 
 
 def find_lane(state: dict[str, Any], lane_name: str) -> dict[str, Any]:
@@ -2239,6 +2427,7 @@ def init(args: argparse.Namespace) -> None:
             load_json_value(args.task_blueprint),
             runtime_availability=runtime_availability,
             active_capability_ids=parse_csv(args.active_capability_ids) or None,
+            available_capabilities=available_capability_catalog(args.available_capabilities),
         )
         projected = plan["laneProjection"]["laneDefinitions"]
         if lane_definitions is not None:
@@ -2293,6 +2482,11 @@ def init(args: argparse.Namespace) -> None:
                 else {}
             ),
             **(
+                {"orchestrationPolicy": args.orchestration_policy}
+                if args.orchestration_policy
+                else {}
+            ),
+            **(
                 {"nativeThreadUserApproved": args.native_thread_user_approved}
                 if args.native_thread_user_approved is not None
                 else {}
@@ -2330,6 +2524,48 @@ def init(args: argparse.Namespace) -> None:
         )
     )
     policy = normalize_execution_policy(policy_raw, lanes)
+    orchestration_policy_explicit = isinstance(policy_raw, dict) and "orchestrationPolicy" in policy_raw
+    semantic_orchestration_fields = {
+        "purpose", "contributionRole", "semanticAuthority", "semanticOwner",
+        "dependencyReasons", "inputContracts", "outputContracts", "handoffRisk",
+        "handoffMode", "capabilityRequirements", "capabilityNeeds",
+    }
+    orchestration_contract_present = any(
+        semantic_orchestration_fields & set(lane.get("orchestrationDeclared", []))
+        for lane in lanes
+    )
+    if plan is None and not orchestration_policy_explicit and not orchestration_contract_present:
+        # Existing schema-v2 callers did not know the orchestration contract.
+        # Preserve their historical behavior while making every plan produced
+        # by the updated skill/tool path explicitly strict.
+        policy["orchestrationPolicy"] = "legacy"
+    runtime_availability = load_json_value(args.runtime_availability)
+    if not isinstance(runtime_availability, dict) or not all(
+        isinstance(value, bool) for value in runtime_availability.values()
+    ):
+        fail("runtime availability must be a JSON object with boolean values.")
+    orchestration_plan = plan.get("orchestrationPlan") if plan else None
+    if orchestration_plan is None:
+        try:
+            orchestration_plan = compile_orchestration_plan(
+                lanes,
+                policy=policy["orchestrationPolicy"],
+                active_capability_ids=parse_csv(args.active_capability_ids) or None,
+                runtime_availability=runtime_availability,
+                available_capabilities=available_capability_catalog(args.available_capabilities),
+            )
+        except ValueError as error:
+            fail(str(error))
+    apply_orchestration_projection(lanes, orchestration_plan)
+    if (
+        plan is None
+        and policy["orchestrationPolicy"] == "strict"
+        and not orchestration_plan["orchestrationExecutable"]
+    ):
+        fail(
+            "orchestration_invalid: "
+            + json.dumps(orchestration_plan["blockers"], ensure_ascii=False)
+        )
     risky = any(lane.get("writeBoundary") == "approved-target" for lane in lanes) or policy.get(
         "independentReviewRequired", False
     )
@@ -2350,6 +2586,8 @@ def init(args: argparse.Namespace) -> None:
         )
     if plan is not None and enforcement_mode == "semantic_strict" and risky and not plan["planExecutable"]:
         fail("semantic_strict risk init requires an executable SolutionGraph plan: " + json.dumps(plan["blockers"], ensure_ascii=False))
+    if orchestration_plan["orchestrationExecutable"] or policy["orchestrationPolicy"] != "strict":
+        apply_runtime_selection(policy, lanes)
 
     contract_spec: dict[str, Any] | None = None
     contract_digest = ""
@@ -2393,6 +2631,14 @@ def init(args: argparse.Namespace) -> None:
         "planBlockers": plan["blockers"] if plan else [],
         "planRuntimeAvailability": load_json_value(args.runtime_availability) if plan else None,
         "planActiveCapabilityIds": parse_csv(args.active_capability_ids) if plan else [],
+        "orchestrationPlan": orchestration_plan,
+        "orchestrationPlanDigest": orchestration_plan["orchestrationDigest"],
+        "orchestrationExecutable": orchestration_plan["orchestrationExecutable"],
+        "orchestrationBlockers": orchestration_plan["blockers"],
+        "orchestrationWarnings": orchestration_plan["warnings"],
+        "availableCapabilities": available_capability_catalog(args.available_capabilities),
+        "orchestrationRuntimeAvailability": runtime_availability,
+        "orchestrationActiveCapabilityIds": parse_csv(args.active_capability_ids),
         # Only newly initialized SolutionGraph states opt into the durable
         # permit/receipt/result protocol. Older manual checkpoints remain
         # readable and retain their legacy callback contract.
@@ -2509,6 +2755,13 @@ def ready_lanes(args: argparse.Namespace) -> None:
                 "readyLanes": selected,
                 "deferredReadyLanes": ready[available_slots:],
                 "blockedLanes": blocked,
+                "orchestration": {
+                    "policy": policy.get("orchestrationPolicy", "legacy"),
+                    "semanticOwnerLane": state.get("orchestrationPlan", {}).get("semanticOwnerLane", ""),
+                    "activeWave": min((lane.get("orchestrationWave", 0) for lane in selected), default=0),
+                    "parallelFrontier": [lane.get("name", "") for lane in selected],
+                    "serialEdges": state.get("orchestrationPlan", {}).get("serialEdges", []),
+                },
             },
             ensure_ascii=False,
             indent=2,
@@ -2592,6 +2845,45 @@ def insert_lane(args: argparse.Namespace) -> None:
             if args.depends_on is not None
             else None
         ),
+        purpose=args.purpose,
+        contribution_role=args.contribution_role,
+        semantic_authority=args.semantic_authority,
+        semantic_owner=args.semantic_owner,
+        dependency_reasons=load_json_value(args.dependency_reasons) if args.dependency_reasons else {},
+        input_contracts=load_json_value(args.input_contracts) if args.input_contracts else [],
+        output_contracts=load_json_value(args.output_contracts) if args.output_contracts else [],
+        external_inputs=load_json_value(args.external_inputs) if args.external_inputs else [],
+        write_targets=load_json_value(args.write_targets) if args.write_targets else [],
+        handoff_risk=args.handoff_risk,
+        handoff_mode=args.handoff_mode,
+        handoff_contract=load_json_value(args.handoff_contract) if args.handoff_contract else {},
+        verification_scope=args.verification_scope,
+        capability_requirements=parse_csv(args.capability_requirements),
+        capability_needs=load_json_value(args.capability_needs) if args.capability_needs else [],
+        estimated_effort=args.estimated_effort,
+        continuity_required=args.continuity_required,
+        orchestration_declared=[
+            field for field, declared in (
+                ("dependsOn", args.independent or args.depends_on is not None),
+                ("purpose", bool(args.purpose)),
+                ("contributionRole", bool(args.contribution_role)),
+                ("semanticAuthority", bool(args.semantic_authority)),
+                ("semanticOwner", args.semantic_owner),
+                ("dependencyReasons", bool(args.dependency_reasons)),
+                ("inputContracts", bool(args.input_contracts)),
+                ("outputContracts", bool(args.output_contracts)),
+                ("externalInputs", bool(args.external_inputs)),
+                ("writeTargets", bool(args.write_targets)),
+                ("handoffRisk", bool(args.handoff_risk)),
+                ("handoffMode", bool(args.handoff_mode)),
+                ("handoffContract", bool(args.handoff_contract)),
+                ("verificationScope", bool(args.verification_scope)),
+                ("capabilityRequirements", bool(args.capability_requirements)),
+                ("capabilityNeeds", bool(args.capability_needs)),
+                ("estimatedEffort", args.estimated_effort != 1),
+                ("continuityRequired", args.continuity_required),
+            ) if declared
+        ],
         status=args.status,
         artifact=args.artifact,
         decision=args.decision,
@@ -2609,36 +2901,34 @@ def insert_lane(args: argparse.Namespace) -> None:
             )
     if distributed_worker_required(state["executionPolicy"].get("mode", ""), lane):
         lane["workerRequired"] = True
-    lane["recommendedRuntime"] = recommended_runtime(
-        lane,
-        state["executionPolicy"].get("eligibleRuntimes", []),
-        native_approved=native_thread_approved(state["executionPolicy"]),
-        selection_policy=state["executionPolicy"].get(
-            "runtimeSelectionPolicy", "lane_lifecycle"
-        ),
-    )
-    if lane["workerLifecycle"] == "persistent" and not is_distributed_mode(
-        state["executionPolicy"].get("mode", "")
-    ):
-        fail(
-            f"Lane {lane_name} is persistent and requires mode=distributed "
-            "(legacy alias: multi_session)."
-        )
-    if (
-        is_distributed_mode(state["executionPolicy"].get("mode", ""))
-        and lane["workerRequired"]
-        and not lane["recommendedRuntime"]
-    ):
-        fail(
-            f"Lane {lane_name} requires an independent worker, but its lifecycle "
-            "and runtimePreference cannot be satisfied by the locked executionPolicy."
-        )
     lanes.insert(index, lane)
     invalidate_finalization(state, f"lane inserted: {lane_name}")
     if lane["workerRequired"]:
         required = state["executionPolicy"]["requiredWorkerLanes"]
         if lane_name not in required:
             required.append(lane_name)
+    try:
+        orchestration_plan = compile_orchestration_plan(
+            lanes,
+            policy=state["executionPolicy"].get("orchestrationPolicy", "legacy"),
+            active_capability_ids=state.get("orchestrationActiveCapabilityIds") or None,
+            runtime_availability=state.get("orchestrationRuntimeAvailability") or {},
+            available_capabilities=state.get("availableCapabilities") or [],
+        )
+    except ValueError as error:
+        fail(str(error))
+    if (
+        state["executionPolicy"].get("orchestrationPolicy") == "strict"
+        and not orchestration_plan["orchestrationExecutable"]
+    ):
+        fail("orchestration_invalid: " + json.dumps(orchestration_plan["blockers"], ensure_ascii=False))
+    apply_orchestration_projection(lanes, orchestration_plan)
+    state["orchestrationPlan"] = orchestration_plan
+    state["orchestrationPlanDigest"] = orchestration_plan["orchestrationDigest"]
+    state["orchestrationExecutable"] = orchestration_plan["orchestrationExecutable"]
+    state["orchestrationBlockers"] = orchestration_plan["blockers"]
+    state["orchestrationWarnings"] = orchestration_plan["warnings"]
+    apply_runtime_selection(state["executionPolicy"], lanes)
     save_state(path, state)
     print(json.dumps({"inserted": lane, "lanes": lanes}, ensure_ascii=False, indent=2))
 
@@ -3731,6 +4021,7 @@ def revise_contract(args: argparse.Namespace) -> None:
                 load_json_value(args.task_blueprint),
                 runtime_availability=runtime_availability,
                 active_capability_ids=active_ids or None,
+                available_capabilities=state.get("availableCapabilities") or [],
             )
             old_graph = state.get("solutionGraph")
             new_graph = new_plan.get("solutionGraph")
@@ -3829,6 +4120,12 @@ def revise_contract(args: argparse.Namespace) -> None:
         state["planDigest"] = new_plan["planDigest"]
         state["planExecutable"] = new_plan["planExecutable"]
         state["planBlockers"] = new_plan["blockers"]
+        state["orchestrationPlan"] = new_plan["orchestrationPlan"]
+        state["orchestrationPlanDigest"] = new_plan["orchestrationPlan"]["orchestrationDigest"]
+        state["orchestrationExecutable"] = new_plan["orchestrationPlan"]["orchestrationExecutable"]
+        state["orchestrationBlockers"] = new_plan["orchestrationPlan"]["blockers"]
+        state["orchestrationWarnings"] = new_plan["orchestrationPlan"]["warnings"]
+        apply_orchestration_projection(lanes, new_plan["orchestrationPlan"])
     for event in state.get("correctionEvents", []):
         if event.get("id") in consumed_ids:
             event["status"] = "consumed"
@@ -3932,9 +4229,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--runtime-availability", default="{}", help="JSON object or @path")
     p.set_defaults(func=route_capabilities)
 
+    p = sub.add_parser("plan-orchestration")
+    p.add_argument("--lane-definitions", required=True, help="JSON array or @path")
+    p.add_argument("--orchestration-policy", choices=sorted(ORCHESTRATION_POLICIES), default=DEFAULT_ORCHESTRATION_POLICY)
+    p.add_argument("--active-capability-ids", default="")
+    p.add_argument("--available-capabilities", default="[]", help="JSON array or @path")
+    p.add_argument("--runtime-availability", default="{}", help="JSON object or @path")
+    p.set_defaults(func=plan_orchestration_command)
+
     p = sub.add_parser("plan-blueprint")
     p.add_argument("--task-blueprint", required=True, help="JSON object or @path")
     p.add_argument("--active-capability-ids", default="")
+    p.add_argument("--available-capabilities", default="[]", help="JSON array or @path")
     p.add_argument("--runtime-availability", default="{}", help="JSON object or @path")
     p.set_defaults(func=plan_blueprint_command)
 
@@ -3949,6 +4255,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--auto-plan", action="store_true")
     p.add_argument("--runtime-availability", default="{}", help="JSON object or @path")
     p.add_argument("--active-capability-ids", default="")
+    p.add_argument("--available-capabilities", default="[]", help="JSON array or @path")
     p.add_argument("--lanes", default="")
     p.add_argument("--lane-definitions", default="", help="JSON array or @path")
     p.add_argument("--execution-policy", default="", help="JSON object or @path")
@@ -3959,6 +4266,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--required-worker-lanes", default="")
     p.add_argument("--independent-review-required", action="store_true")
     p.add_argument("--runtime-selection-policy", choices=sorted(RUNTIME_SELECTION_POLICIES), default="")
+    p.add_argument("--orchestration-policy", choices=["", *sorted(ORCHESTRATION_POLICIES)], default="")
     p.add_argument("--native-thread-user-approved", action=argparse.BooleanOptionalAction, default=None)
     p.add_argument("--max-parallel-workers", type=int, default=0)
     p.add_argument("--project-affinity-policy", choices=sorted(PROJECT_AFFINITY_POLICIES), default="")
@@ -4002,6 +4310,23 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--runtime-preference", choices=sorted(RUNTIME_PREFERENCES), default="auto")
     p.add_argument("--depends-on", default=None)
     p.add_argument("--independent", action="store_true")
+    p.add_argument("--purpose", default="")
+    p.add_argument("--contribution-role", choices=["", *sorted(CONTRIBUTION_ROLES)], default="")
+    p.add_argument("--semantic-authority", choices=["", *sorted(SEMANTIC_AUTHORITIES)], default="")
+    p.add_argument("--semantic-owner", action="store_true")
+    p.add_argument("--dependency-reasons", default="", help="JSON object or @path")
+    p.add_argument("--input-contracts", default="", help="JSON array or @path")
+    p.add_argument("--output-contracts", default="", help="JSON array or @path")
+    p.add_argument("--external-inputs", default="", help="JSON array or @path")
+    p.add_argument("--write-targets", default="", help="JSON array or @path")
+    p.add_argument("--handoff-risk", choices=["", *sorted(HANDOFF_RISKS)], default="")
+    p.add_argument("--handoff-mode", choices=["", *sorted(mode for mode in HANDOFF_MODES if mode)], default="")
+    p.add_argument("--handoff-contract", default="", help="JSON object/array or @path")
+    p.add_argument("--verification-scope", choices=["", *sorted(VERIFY_SCOPES)], default="")
+    p.add_argument("--capability-requirements", default="")
+    p.add_argument("--capability-needs", default="", help="JSON value or @path")
+    p.add_argument("--estimated-effort", type=float, default=1)
+    p.add_argument("--continuity-required", action="store_true")
     p.add_argument("--status", choices=["pending", "running", "done", "needs-work", "blocked", "stale"], default="pending")
     p.add_argument("--artifact", default="")
     p.add_argument("--decision", choices=["", "pass", "needs-work", "blocked"], default="")
