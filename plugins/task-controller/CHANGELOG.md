@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0+codex.20260827
+
+- Added first-class `OrchestrationPlan 1.0` between task decomposition and worker runtime selection.
+- Added strict semantic ownership, contribution/authority roles, explicit parallel waves, justified serial edges, join points, artifact producer/consumer contracts, and shared-writer validation.
+- Blocked premature QA/review that runs before the decision, sample, or artifact it judges.
+- Added handoff-loss checks so high-cohesion design and production stay in one lane unless a concrete artifact contract preserves the handoff.
+- Added lane-level capability matching from each job's purpose, inputs, outputs, and acceptance role instead of copying a global domain match across workers.
+- Added `task_controller_plan_orchestration`, persisted orchestration state/digests, and wave details in `task_controller_ready_lanes`.
+- Added a generic strict no-scenario-pack path; the controller no longer defaults new composite work to a fixed five-lane template.
+- Preserved existing schema-v2 states and unversioned legacy lane callers through visible `legacy-order` compatibility.
+
 ## 0.5.0+codex.20260814
 
 - Added explicit decision authority (`locked`, `agent_may_decide`, and

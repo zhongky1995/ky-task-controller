@@ -444,6 +444,9 @@ def projection_to_lane_definitions(graph: Any) -> dict[str, Any]:
         metadata = {
             "nodeId": node_id,
             "dependsOn": node["dependsOn"],
+            "purpose": node["purpose"],
+            "inputContracts": node["inputContracts"],
+            "outputContracts": node["outputContracts"],
             "capabilityRequirements": node["capabilityRequirements"],
             "unitIds": node["unitIds"],
             "sourceIds": node["sourceIds"],
@@ -456,6 +459,7 @@ def projection_to_lane_definitions(graph: Any) -> dict[str, Any]:
         lane_definitions.append({
             "name": node_id,
             "kind": lane_kind,
+            "purpose": node["purpose"],
             "writeBoundary": node["writeBoundary"],
             "notes": f"SolutionGraph node {node_id}; dependsOn={','.join(node['dependsOn']) or 'none'}",
             "metadata": metadata,

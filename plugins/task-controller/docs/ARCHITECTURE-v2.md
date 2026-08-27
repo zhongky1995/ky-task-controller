@@ -1,6 +1,6 @@
 # KY-TASK v2 System Architecture
 
-Status: proposed architecture
+Status: living architecture; Blueprint/SolutionGraph/WorkerPacket/permit/verification and OrchestrationPlan slices are implemented
 Scope: task judgment, solution design, capability routing, execution control, and outcome verification
 Compatibility baseline: current `schemaVersion: 2`
 
@@ -11,11 +11,11 @@ This document is a target architecture and migration contract. It does not claim
 | Area | Current implementation | Target architecture |
 |---|---|---|
 | task definition | human-readable Planner output plus manually created `contractSpec` | validated `TaskBlueprint` compiled from one diagnosis |
-| decomposition | ordered lane array designed by the controller | versioned dependency DAG projected to compatible lanes |
+| decomposition and orchestration | `SolutionGraph` plus `OrchestrationPlan` with semantic ownership, waves, justified serial edges, join points, handoff checks, and legacy lane projection | versioned dependency DAG with richer cost/lease optimization |
 | worker assignment | free-text task and prompt with contract hashes | immutable `WorkerPacket` compiled from the graph |
 | write governance | callback receipt validation and operating discipline | controller-issued `OperationPermit` and dispatcher-only W3/W4 execution |
 | verification | worker/reviewer check IDs with free-text evidence | artifact-bound, reproducible `VerificationResult` objects |
-| routing | model selects skills from descriptions | registry-backed, explainable capability resolution |
+| routing | scenario-level registry routing plus lane-level exact/suggested capability routes | broader dynamic catalog with equivalent-capability proofs |
 
 Until the relevant migration step ships, current limitations remain explicit and must not be presented as implemented guarantees.
 
@@ -86,9 +86,11 @@ Human involvement is mandatory when:
    - Produce a traceability report showing how user statements map to blueprint fields.
    - High-risk tasks fail closed when required intent is unmapped.
 
-4. **Solution design and routing**
+4. **Solution design, orchestration, and routing**
    - Select a scenario pattern when one fits.
    - Build a dependency graph based on actual professional work, not generic lane names.
+   - Compile one semantic owner, the primary path, parallel waves, justified serial edges, join points, and handoff-loss decisions.
+   - Match capabilities against each lane's job/input/output/acceptance role before selecting worker runtime.
    - Resolve required abstract capabilities to currently available skills and tools.
    - Apply capacity, cost, permission, and write-risk checks.
 
@@ -121,6 +123,7 @@ Human involvement is mandatory when:
 | `ClaimSpec` | Connects a proposed claim to evidence | claim text/type, supporting sources, confidence, allowed use, affected units | Blueprint / domain methodology |
 | `UnitSpec` | Defines one page, section, table, chart, node, or module | task, expected conclusion/function, required evidence, implementation constraints, forbidden content, acceptance IDs | Blueprint Compiler |
 | `SolutionGraph` | Full production dependency graph | nodes, edges, stage purpose, capacity and approval gates | Solution Architect |
+| `OrchestrationPlan` | Proves how work should run | semantic owner, contribution/authority roles, waves, serial reasons, join points, artifact flow, handoff checks, lane capability routes | Solution Architect |
 | `LaneSpec` | Executable graph node | inputs, output schema, capability requirements, standard IDs, acceptance IDs, write policy | Solution Architect |
 | `CapabilitySpec` | Routable capability definition | domain, triggers, exclusions, input/output contracts, operations, dependencies, verification | Capability Registry |
 | `WorkerPacket` | Immutable task assigned to one worker | contract slice, input artifact refs, output schema, constraints, acceptance cases, permissions, callback contract | Blueprint Compiler / Controller |
@@ -155,7 +158,7 @@ It must not silently drop Planner content. High-risk execution is blocked when r
 
 ```text
 TaskBlueprint + CapabilityRegistry + RuntimeAvailability
--> SolutionGraph + RoutingDecision + PermissionPlan + CapacityPlan
+-> SolutionGraph + OrchestrationPlan + RoutingDecision + PermissionPlan + CapacityPlan
 ```
 
 Every routing decision includes selected and rejected capabilities, reasons, fallback rules, and expected verification.
@@ -291,6 +294,7 @@ Professional decomposition and runtime persistence are separate decisions.
 ```text
 task contract
 -> professional lanes and write/review boundaries
+-> semantic work orchestration and lane-level capability binding
 -> distributed-execution decision
 -> per-lane lifecycle decision
 -> runtime dispatch
@@ -358,7 +362,7 @@ SolutionGraph, WorkerPacket, permit, receipt, or verification semantics.
 | Gap | Current consequence | Target repair layer |
 |---|---|---|
 | Planner output remains prose | business requirements are lost during manual translation | Blueprint Compiler |
-| generic sequential lane model | decomposition follows templates rather than real dependencies | SolutionGraph DAG |
+| legacy missing dependency metadata | old states serialize by lane order | strict OrchestrationPlan for all new composite plans; visible legacy inference for compatibility |
 | worker prompt is free text | workers receive another interpretation of the task | immutable WorkerPacket |
 | evidence is self-attested text | review proves formal coverage but not truth | AcceptanceCase + VerificationResult |
 | no capability metadata standard | routing depends on model memory and skill descriptions | Capability Registry |
@@ -374,6 +378,7 @@ task-controller/
     diagnosis.py              # TaskDiagnosis schema and validation
     blueprint.py              # TaskBlueprint schema and compiler
     solution_graph.py         # DAG construction and validation
+    orchestration.py          # semantic ownership, waves, joins, handoff and per-lane capability routing
     capability_router.py      # registry matching and routing explanation
   runtime/
     controller_state.py       # current execution governance, extracted from helper
@@ -491,6 +496,7 @@ The next version is not a larger task checklist. It is a compiler-driven agent c
 one user intent
 -> one canonical blueprint
 -> one explainable solution graph
+-> one accepted work orchestration plan
 -> capability-bound worker packets
 -> artifact-bound verification
 -> one final business decision

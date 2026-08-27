@@ -2,6 +2,12 @@
 
 Use these templates to run or dispatch lanes.
 
+These are output-contract examples, not an orchestration template. Before using
+one, the accepted `OrchestrationPlan` must already declare the lane's
+`contributionRole`, `semanticAuthority`, `semanticOwner`, `dependsOn`,
+`dependencyReasons`, input/output contracts, handoff policy, and lane-level
+capability requirement.
+
 ## Evidence Lane
 
 ```text
@@ -105,6 +111,11 @@ artifactManifest shape:
 checkResults shape: [{id, status: pass, evidence}]
 writeReceipt shape: {targetId, targetLocator, action, beforeVersion, afterVersion, readbackEvidence, idempotencyKey}
 correctionEvents shape: [{id?, reason, recommendedInvalidFromLane, keywords?}]
+contributionRole / semanticAuthority / semanticOwner:
+dependsOn / dependencyReasons:
+inputContracts / outputContracts:
+handoffRisk / handoffMode / handoffContract:
+capabilityRequirements:
 ```
 
 Unknown, duplicate, missing, failed, or evidence-free check results cannot satisfy a pass. If correction language changes target, source, preservation, permission, or acceptance, return a correction event and `needs-work`; do not keep a pass recommendation.

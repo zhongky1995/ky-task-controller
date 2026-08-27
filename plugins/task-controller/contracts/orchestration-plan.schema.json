@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "orchestration-plan.schema.json",
+  "title": "OrchestrationPlan v1",
+  "type": "object",
+  "required": [
+    "orchestrationVersion",
+    "policy",
+    "source",
+    "lanes",
+    "topologicalOrder",
+    "waves",
+    "parallelGroups",
+    "serialEdges",
+    "joinPoints",
+    "semanticOwnerLane",
+    "primaryPath",
+    "capabilityRoutes",
+    "runtimeSelectionStage",
+    "orchestrationExecutable",
+    "blockers",
+    "warnings",
+    "orchestrationDigest"
+  ],
+  "properties": {
+    "orchestrationVersion": {"type": "string"},
+    "policy": {"enum": ["strict", "advisory", "legacy"]},
+    "source": {"type": "string"},
+    "lanes": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/lane"}},
+    "topologicalOrder": {"type": "array", "items": {"type": "string"}},
+    "waves": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["wave", "lanes", "parallel"],
+        "properties": {
+          "wave": {"type": "integer", "minimum": 1},
+          "lanes": {"type": "array", "items": {"type": "string"}},
+          "parallel": {"type": "boolean"}
+        }
+      }
+    },
+    "parallelGroups": {"type": "array", "items": {"type": "array", "items": {"type": "string"}}},
+    "serialEdges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "reason"],
+        "properties": {
+          "from": {"type": "string"},
+          "to": {"type": "string"},
+          "reason": {"type": "string"}
+        }
+      }
+    },
+    "joinPoints": {"type": "array", "items": {"type": "object"}},
+    "semanticOwnerLane": {"type": "string"},
+    "primaryPath": {"type": "array", "items": {"type": "string"}},
+    "capabilityRoutes": {"type": "array", "items": {"type": "object"}},
+    "runtimeSelectionStage": {"const": "after-orchestration"},
+    "orchestrationExecutable": {"type": "boolean"},
+    "blockers": {"type": "array", "items": {"type": "object"}},
+    "warnings": {"type": "array", "items": {"type": "object"}},
+    "orchestrationDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  },
+  "$defs": {
+    "lane": {
+      "type": "object",
+      "required": [
+        "name", "kind", "purpose", "contributionRole", "semanticAuthority",
+        "semanticOwner", "dependsOn", "dependencySource", "dependencyReasons",
+        "inputContracts", "outputContracts", "writeBoundary", "writeTargets",
+        "handoffRisk", "handoffMode", "verificationScope",
+        "capabilityRequirements", "capabilityNeeds", "estimatedEffort"
+      ],
+      "properties": {
+        "name": {"type": "string"},
+        "kind": {"type": "string"},
+        "purpose": {"type": "string"},
+        "contributionRole": {"enum": ["primary", "prerequisite", "supporting", "verification"]},
+        "semanticAuthority": {"enum": ["define", "constrain", "implement", "define-and-implement", "verify"]},
+        "semanticOwner": {"type": "boolean"},
+        "dependsOn": {"type": "array", "items": {"type": "string"}},
+        "dependencySource": {"enum": ["explicit", "legacy-order"]},
+        "dependencyReasons": {"type": "object", "additionalProperties": {"type": "string"}},
+        "inputContracts": {"type": "array", "items": {"type": "string"}},
+        "outputContracts": {"type": "array", "items": {"type": "string"}},
+        "writeBoundary": {"type": "string"},
+        "writeTargets": {"type": "array", "items": {"type": "string"}},
+        "handoffRisk": {"enum": ["low", "medium", "high"]},
+        "handoffMode": {"enum": ["", "same-lane", "artifact-contract", "independent"]},
+        "verificationScope": {"enum": ["final-artifact", "intermediate-artifact", "upstream-decision"]},
+        "capabilityRequirements": {"type": "array", "items": {"type": "string"}},
+        "estimatedEffort": {"type": "number", "exclusiveMinimum": 0}
+      }
+    }
+  }
+}

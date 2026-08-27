@@ -40,6 +40,17 @@ Parallelism is dependency-driven:
 - Missing `dependsOn` is accepted only for legacy states and preserves the historical ordered-lane chain.
 - Dispatch the full ready frontier, up to `maxParallelWorkers` (distribution default: 4), before waiting for any worker.
 
+Orchestration is a first-class control stage, not a side effect of lane order:
+
+- Keep four decisions separate: task decomposition -> work orchestration -> lane-level capability matching -> lifecycle/runtime selection.
+- Before Session creation, compile a strict `OrchestrationPlan` with `task_controller_plan_orchestration`.
+- Every multi-lane plan declares one `semanticOwner`, and every lane declares `contributionRole`, `semanticAuthority`, `purpose`, `dependsOn`, and the reason for each serial edge.
+- Classify lanes as `primary`, `prerequisite`, `supporting`, or `verification`. Supporting work must feed the primary path; verification must consume the decision, sample, or artifact it judges.
+- Use `inputContracts` and `outputContracts` to derive dependencies. List position is never a valid dependency reason.
+- Match capabilities from each lane's actual job, inputs, outputs, write boundary, and acceptance role. Do not copy a globally matched domain skill onto every lane.
+- Assess handoff loss before splitting design from production. High-loss work stays in one `define-and-implement` lane unless a concrete artifact handoff contract preserves the judgment.
+- Runtime selection happens only after orchestration passes. A clean Session executes the graph; it does not make a wrong graph correct.
+
 ## Use With Task Boundary Planner
 
 - If no task contract exists, first create or request one. If `task-boundary-planner` is available and relevant, use it to lock the contract.
@@ -145,6 +156,7 @@ If a referenced or resumed task matches the mandatory split rules, do not rely o
 
 Read `references/controller-protocol.md` when preparing the controller plan or handoff.
 Read `references/lane-contracts.md` when generating lane prompts or checkpoints.
+Read `references/work-orchestration.md` for every new composite lane map, generic no-pack task, dependency correction, or failure involving wrong parallel/serial order.
 Read `references/session-orchestration.md` when the task needs distributed execution, worker prompts, thread dispatch, or worker result merge.
 Read `references/codex-thread-adapter.md` when checking, creating, messaging, or recovering Codex Desktop worker threads.
 Read `references/business-delivery-presets.md` for client page decks, evidence-led analysis, Feishu Base/dashboard/Wiki delivery, or revision of an existing document.
@@ -157,29 +169,36 @@ Read `references/business-delivery-presets.md` for client page decks, evidence-l
    - inherit the controller's saved `projectId`, or resolve one deterministic path match;
    - lock `targetProjectId`, optional `targetProjectPath`, and `projectResolutionSource`;
    - stop for user selection when no unique saved project exists.
-3. Choose execution mode:
+3. Compile work orchestration:
+   - define the one semantic owner and the primary path;
+   - classify prerequisite, supporting, primary, and verification work;
+   - derive dependencies from artifact/decision/sample consumption;
+   - state a reason for every serial edge and identify the parallel waves/join points;
+   - match capability requirements per lane;
+   - run `task_controller_plan_orchestration` with `orchestrationPolicy: strict` and fix all blockers.
+4. Choose execution mode:
    - `single-thread lanes`: current thread runs each lane sequentially.
    - `distributed`: visible native Session workers produce lane artifacts.
-4. Create lane map.
-5. For each lane, state:
+5. Create the accepted lane map.
+6. For each lane, state:
    - input
    - output
    - write boundary
    - forbidden actions
    - pass gate
    - `dependsOn`
-6. Call `task_controller_ready_lanes` and dispatch every returned lane, bounded by `maxParallelWorkers`.
-7. Create all Session workers with `target.type: project` and the locked `projectId` before waiting for any one of them.
-8. Verify each created thread reports the same `projectId`, then register it with `projectId` and `projectEnvironment`.
-9. Wait on the batch together; record callbacks and lane checkpoints as workers finish.
-10. Refill freed capacity from the newly ready frontier.
-11. Final review checks project affinity, source lineage, user path, write boundary, stale-version contamination, and acceptance cases.
+7. Call `task_controller_ready_lanes` and dispatch every returned lane, bounded by `maxParallelWorkers`.
+8. Create all Session workers with `target.type: project` and the locked `projectId` before waiting for any one of them.
+9. Verify each created thread reports the same `projectId`, then register it with `projectId` and `projectEnvironment`.
+10. Wait on the batch together; record callbacks and lane checkpoints as workers finish.
+11. Refill freed capacity from the newly ready frontier.
+12. Final review checks project affinity, source lineage, user path, write boundary, stale-version contamination, and acceptance cases.
 
 ## Actual Task Decomposition
 
 When the task cannot be completed reliably in one uninterrupted flow, split by real work type, not by arbitrary step labels.
 
-Typical split:
+Possible work types (not a fixed template):
 
 - Evidence worker: source ledger and evidence status.
 - Model worker: objects, fields, state machines, source-to-target mapping.
@@ -187,7 +206,7 @@ Typical split:
 - Implementation worker: the single approved writer for the final artifact.
 - Review worker: independent acceptance check.
 
-The controller must state which lanes are independent, which lanes depend on prior outputs, and which lane is allowed to write the final artifact.
+Create only work types required by the actual contract. The controller must state which lanes are independent, why every serial edge exists, where parallel outputs join, which lane owns the result meaning, and which lane may write each final artifact. When no scenario pack matches, use the generic strict orchestration contract instead of defaulting to these five examples.
 
 When distributed execution is approved, the controller must dispatch visible native Codex Session workers. Do not use managed subagents under the installed `native_session_required` policy. Run lanes sequentially only after the user explicitly overrides that policy for the current task.
 
@@ -231,7 +250,9 @@ python3 scripts/task_controller_state.py next-lane --state /tmp/controller.json
 
 `task_controller_init` accepts `contract`, either `lanes` or explicit `laneDefinitions`, and `executionPolicy`. Lane definitions can lock `workerLifecycle`, `contextPolicy`, `runtimePreference`, and `dependsOn`. The policy locks `splitRequirement`, `mode`, `eligibleRuntimes`, `downgradeReason`, `requiredWorkerLanes`, `independentReviewRequired`, `runtimeSelectionPolicy`, `nativeThreadUserApproved`, `maxParallelWorkers`, `projectAffinityPolicy`, `projectlessUserApproved`, `targetProjectId`, `targetProjectPath`, and `projectResolutionSource`. Mandatory work with an eligible real runtime cannot initialize as `direct` or `sequential_lanes`; a no-runtime fallback requires an explicit downgrade reason. Under the Session-first policy, distributed native initialization also fails until a saved project is resolved.
 
-For a new `TaskBlueprint`, use `plan-blueprint` to read-only compile the routing decision, formal `SolutionGraph`, projected lanes, and `WorkerPackets`. It never dispatches workers. `init --task-blueprint --auto-plan` persists that plan and uses its lane projection when no `laneDefinitions` are supplied. A graph-backed worker registration and callback must include the current packet ID and digest; workers are not dispatched automatically by planning or initialization.
+For any new composite lane map, use `plan-orchestration` first. It returns explicit parallel waves, justified serial edges, join points, semantic ownership, handoff blockers, and lane-level capability routes without dispatching workers. Strict initialization rejects an explicitly orchestrated plan with unresolved blockers. Legacy schema-v2 callers remain readable and are marked as legacy-order when they did not declare the new contract.
+
+For a new `TaskBlueprint`, use `plan-blueprint` to read-only compile the routing decision, formal `SolutionGraph`, `OrchestrationPlan`, projected lanes, and `WorkerPackets`. It never dispatches workers. `init --task-blueprint --auto-plan` persists that plan and uses its lane projection when no `laneDefinitions` are supplied. A graph-backed worker registration and callback must include the current packet ID and digest; workers are not dispatched automatically by planning or initialization.
 
 For change-policy items, set `authority` only when the user has actually fixed that boundary. Preserve and forbidden items are always `locked`. Ordinary allowed edits default to `agent_may_decide`; commercially material allowed edits default to `propose_then_confirm`. Scenario policy may inject mandatory acceptance cases and a fingerprint-bound approval gate into the effective Blueprint. Treat those applications as control policy, not optional suggestions.
 
@@ -298,6 +319,7 @@ Installed MCP tools can also record worker/session state:
 
 - `task_controller_init`
 - `task_controller_compile_blueprint`
+- `task_controller_plan_orchestration`
 - `task_controller_route_capabilities`
 - `task_controller_status`
 - `task_controller_next_lane`
@@ -495,6 +517,10 @@ Worker prompt
 ## Failure Rules
 
 - If the final artifact is being written before upstream lane gates exist, stop and create the missing lane artifact.
+- If verification or QA is scheduled before the decision, sample, or artifact it judges, reject the plan and move/reclassify that lane before dispatch.
+- If missing dependencies are being interpreted as list-order serialization, stop and compile an explicit strict orchestration plan.
+- If design and production have high handoff loss, merge them into one primary lane or create a concrete artifact handoff contract.
+- If one capability was assigned from the overall domain rather than the lane's actual job/input/output, reroute capabilities per lane.
 - If a worker output lacks source lineage, do not merge it into the final artifact.
 - If old-version artifacts are visible in a clean demo, fail review.
 - If implementation passes API checks but fails the user path, the task is not done.

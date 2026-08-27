@@ -2,6 +2,11 @@
 
 Use this reference only after a task contract exists and the next question is how execution should be split. Do not use it to bypass the planning-only stop rule in `SKILL.md`.
 
+Before choosing single-thread or distributed runtime, apply
+`../../task-controller/references/work-orchestration.md`. Decomposition names
+the professional jobs; orchestration proves which jobs are parallel or serial.
+Runtime selection is the later placement decision.
+
 ## When To Stay Single-Threaded
 
 Stay in the controller thread when:
@@ -23,6 +28,11 @@ Consider distributed execution when:
 ## Mandatory Decomposition Gate
 
 For high-standard composite tasks, do not proceed from accepted plan to broad execution until execution lanes are named.
+
+Naming lanes is not enough. A new composite map must also declare one semantic
+owner, each lane's contribution role and semantic authority, output/input
+contracts, a reason for every serial dependency, parallel waves, and join points.
+Run `task_controller_plan_orchestration` in strict mode when available.
 
 Must output a lane split, then either recommend distributed execution or provide a written single-thread justification, when any of these are true:
 
@@ -89,6 +99,11 @@ For every worker lane, declare:
 - context_policy: packet_only | checkpoint_delta
 - runtime_preference: auto | managed_agent_worker | native_thread_lane
 - depends_on: [] | [upstream lane names]
+- dependency_reasons: {upstream lane: why this must be serial}
+- contribution_role: primary | prerequisite | supporting | verification
+- semantic_authority: define | constrain | implement | define-and-implement | verify
+- input_contracts / output_contracts:
+- capability_requirements:
 ```
 
 Use `ephemeral + packet_only` by default. It is appropriate when the lane has a
@@ -107,7 +122,12 @@ Declare `depends_on` for every lane. Independent siblings use `[]` or the same
 upstream set and should be dispatched together. Shared-target writes and review
 lanes declare the exact writers they must wait for.
 
-## Common Execution Lanes
+Review/QA is not an upstream style guide unless explicitly reclassified as a
+prerequisite constraint. Verification depends on the decision, sample, or
+artifact it judges. If design and production have high handoff loss, keep them
+in one `define-and-implement` lane or require a concrete artifact contract.
+
+## Possible Execution Lanes
 
 Choose only the lanes needed for the accepted contract:
 
@@ -119,6 +139,10 @@ Choose only the lanes needed for the accepted contract:
 - Review lane: source-lineage check, user-path check, old-version contamination check, and final acceptance report.
 
 When a task is a management system, operating dashboard, Feishu/Base demo, or project process cockpit, the product/experience lane and object/model lane must exist before implementation starts.
+
+These are examples, not a default five-lane template. When no scenario pack
+matches, derive the smallest graph from the actual primary path and its consumed
+prerequisites/support; do not instantiate every example lane.
 
 ## Handoff Stop Rule
 
@@ -170,6 +194,9 @@ Execution handoff brief
 - worker lanes:
 - 每个 worker 的 lifecycle / runtime:
 - 每个 worker 的 depends_on:
+- 每个串行依赖的原因 / 并行波次 / join point:
+- semantic owner / primary path:
+- 每个 worker 的 capability requirement:
 - 每个 worker 的输入:
 - 每个 worker 的输出:
 - 写入边界:
