@@ -280,7 +280,13 @@ const executionPolicySchema = {
       default: false,
       description: "Explicit task-scoped user approval for distributed sidebar Session tasks.",
     },
-    maxParallelWorkers: { type: "integer", minimum: 1, maximum: 8, default: 4 },
+    maxParallelWorkers: {
+      type: "integer",
+      minimum: 1,
+      maximum: 10,
+      default: 4,
+      description: "Maximum simultaneously active worker Sessions. This does not limit the total number of lanes in the task graph.",
+    },
     projectAffinityPolicy: {
       type: "string",
       enum: PROJECT_AFFINITY_POLICIES,
@@ -746,7 +752,7 @@ const tools = [
   {
     name: "task_controller_next_lane",
     title: "KY-TASK: Get Next Lane",
-    description: "Return the first incomplete schema-v2 lane.",
+    description: "Return the first dispatch-ready lane or the shared waiting, blocked, finalized, or finalizable status. Does not retry blocked work.",
     inputSchema: {
       type: "object",
       properties: { statePath: { type: "string" } },
@@ -757,7 +763,7 @@ const tools = [
   {
     name: "task_controller_ready_lanes",
     title: "KY-TASK: Get Parallel-Ready Lanes",
-    description: "Return the dependency-ready dispatch frontier, bounded by maxParallelWorkers.",
+    description: "Return the dispatch frontier and recovery blockers using actual active workers plus reserved capacity. Wait batches are a coordination plan, not an automatic host wait loop.",
     inputSchema: {
       type: "object",
       properties: { statePath: { type: "string" } },
@@ -831,9 +837,41 @@ const tools = [
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   },
   {
+    name: "task_controller_claim_dispatch",
+    title: "KY-TASK: Reserve Worker Dispatch",
+    description: "Atomically reserve one lane and worker slot BEFORE host task creation. Only creationAction=create permits creation; repeated requests require reconciliation. Unknown capability runtimes require host-discovery evidence. No task is created by this tool.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        statePath: { type: "string" },
+        lane: { type: "string", minLength: 1 },
+        requestId: { type: "string", minLength: 1 },
+        capabilityEvidence: { type: "object", additionalProperties: { type: "string", minLength: 1 }, description: "Capability ID to concrete host-discovery evidence; controller attestation, not a plugin probe." },
+      },
+      required: ["statePath", "lane", "requestId"],
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "task_controller_release_dispatch",
+    title: "KY-TASK: Reconcile Unbound Dispatch",
+    description: "Release an unbound reservation only after confirming the host task was not created or has stopped. Timeout alone is not evidence. A bound reservation uses the worker lifecycle instead.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        statePath: { type: "string" },
+        claimId: { type: "string", minLength: 1 },
+        outcome: { type: "string", enum: ["not-created", "stopped"] },
+        evidence: { type: "string", minLength: 1 },
+      },
+      required: ["statePath", "claimId", "outcome", "evidence"],
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
     name: "task_controller_register_worker",
     title: "KY-TASK: Register Worker",
-    description: "Register a revision-bound worker with a unique request and runtime identity.",
+    description: "Bind a created worker to its revision and reserved dispatch claim. Enforces one current attempt per lane and worker capacity even for legacy registrations. New strict states require claimId for independent workers.",
     inputSchema: {
       type: "object",
       properties: {
@@ -850,6 +888,7 @@ const tools = [
           description: "Managed agent id, or the exact threadId for native_thread_lane.",
         },
         requestId: { type: "string", default: "" },
+        claimId: { type: "string", description: "claimId returned before host task creation; required for new strict independent dispatches." },
         contractRevision: { type: "integer", minimum: 1 },
         contractDigest: { type: "string", default: "" },
         deliverableFingerprint: { type: "string", default: "" },
@@ -928,6 +967,7 @@ const tools = [
         artifact: { type: "string", default: "" },
         decision: { type: "string", enum: ["", "needs-work", "blocked"], default: "" },
         notes: { type: "string", default: "" },
+        runtimeStopEvidence: { type: "string", description: "When retiring a live worker, concrete host evidence that it stopped; otherwise its capacity remains occupied even after supersession." },
       },
       required: ["statePath", "workerId"],
     },
@@ -1413,6 +1453,20 @@ async function handleToolCall(id, params) {
     toolResult(id, "insert-lane", args.statePath, argv);
     return;
   }
+  if (name === "task_controller_claim_dispatch") {
+    argv.push("--lane", requireString(args.lane, "lane"));
+    argv.push("--request-id", requireString(args.requestId, "requestId"));
+    if (args.capabilityEvidence !== undefined) argv.push("--capability-evidence", JSON.stringify(args.capabilityEvidence));
+    toolResult(id, "claim-dispatch", args.statePath, argv);
+    return;
+  }
+  if (name === "task_controller_release_dispatch") {
+    argv.push("--claim-id", requireString(args.claimId, "claimId"));
+    argv.push("--outcome", requireString(args.outcome, "outcome"));
+    argv.push("--evidence", requireString(args.evidence, "evidence"));
+    toolResult(id, "release-dispatch", args.statePath, argv);
+    return;
+  }
   if (name === "task_controller_register_worker") {
     argv.push("--worker-id", requireString(args.workerId, "workerId"));
     argv.push("--lane", requireString(args.lane, "lane"));
@@ -1420,6 +1474,7 @@ async function handleToolCall(id, params) {
     pushString(argv, "--thread-id", args.threadId);
     pushString(argv, "--runtime-handle", args.runtimeHandle);
     pushString(argv, "--request-id", args.requestId);
+    pushString(argv, "--claim-id", args.claimId);
     pushInteger(argv, "--contract-revision", args.contractRevision);
     pushString(argv, "--contract-digest", args.contractDigest);
     pushString(argv, "--deliverable-fingerprint", args.deliverableFingerprint);
@@ -1450,6 +1505,7 @@ async function handleToolCall(id, params) {
     pushString(argv, "--artifact", args.artifact);
     pushString(argv, "--decision", args.decision);
     pushString(argv, "--notes", args.notes);
+    pushString(argv, "--runtime-stop-evidence", args.runtimeStopEvidence);
     toolResult(id, "update-worker", args.statePath, argv);
     return;
   }

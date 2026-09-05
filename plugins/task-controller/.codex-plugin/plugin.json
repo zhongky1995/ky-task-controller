@@ -1,6 +1,6 @@
 {
   "name": "task-controller",
-  "version": "0.6.0+codex.20260827103424",
+  "version": "0.7.0+codex.20260905040017",
   "description": "Task boundary planning plus KY-TASK controller protocol for gated multi-lane Codex execution.",
   "author": {
     "name": "Zhuanz"

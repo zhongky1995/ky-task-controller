@@ -11,7 +11,9 @@ This is an internal extensibility seam, not a change to the installed default:
 - the selected worker must be independent, user-visible, and project-capable;
 - native Session creation still requires per-task user approval;
 - project affinity still defaults to `inherit_or_resolve_required`;
-- at most four dependency-ready workers run concurrently by default;
+- four dependency-ready workers run concurrently by default, while an explicit
+  task policy may raise the simultaneous-worker ceiling to ten; total Lane
+  count is not capped;
 - unavailable native Session tooling still blocks instead of silently falling
   back to a managed Sub Agent.
 

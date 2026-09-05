@@ -39,11 +39,23 @@ from control_plane.orchestration import (
     SEMANTIC_AUTHORITIES,
     VERIFY_SCOPES,
     compile_orchestration_plan,
+    declared_orchestration_fields,
 )
 from control_plane.solution_graph import build_solution_graph, projection_to_lane_definitions, validate_solution_graph
 from control_plane.worker_packet import compile_worker_packets, render_worker_prompt, validate_worker_packet
 from registry.loader import load_registry
 from operation_adapters import LarkCliAdapter, MemoryTestAdapter
+from runtime.dispatch_admission import (
+    AdmissionError,
+    active_workers,
+    capacity,
+    lane_attempts,
+    registration_claim,
+    require_admission,
+    release_dispatch,
+    reserve_dispatch,
+    reserved_claims,
+)
 from runtime.operation_dispatcher import (
     Dispatcher,
     PermitError,
@@ -89,7 +101,8 @@ PROJECT_RESOLUTION_SOURCES = {
 PROJECT_ENVIRONMENTS = {"local", "worktree"}
 DEFAULT_ORCHESTRATION_POLICY = "strict"
 DEFAULT_MAX_PARALLEL_WORKERS = 4
-MAX_PARALLEL_WORKERS = 8
+MAX_PARALLEL_WORKERS = 10
+MAX_WAIT_TARGETS_PER_CALL = 8
 ENFORCEMENT_MODES = {"workflow_only", "semantic_strict"}
 INTERACTION_MODES = {"discuss_only", "plan_only", "execute"}
 WRITE_BOUNDARIES = {"read-only", "draft-file", "approved-target", "review-only"}
@@ -112,6 +125,8 @@ MUTATING_COMMANDS = {
     "insert-lane",
     "add-note",
     "register-worker",
+    "claim-dispatch",
+    "release-dispatch",
     "update-worker",
     "ingest-feedback",
     "record-correction",
@@ -1721,17 +1736,7 @@ def normalize_lane_definitions(
                 if "dependsOn" in metadata
                 else None
             )
-            orchestration_fields = (
-                "dependsOn", "purpose", "contributionRole", "semanticAuthority", "semanticOwner",
-                "dependencyReasons", "inputContracts", "outputContracts", "externalInputs",
-                "writeTargets", "handoffRisk", "handoffMode", "handoffContract",
-                "verificationScope", "capabilityRequirements", "capabilityNeeds",
-                "estimatedEffort", "continuityRequired",
-            )
-            orchestration_declared = list(dict.fromkeys(
-                list(definition.get("orchestrationDeclared", []))
-                + [field for field in orchestration_fields if field in definition or field in metadata]
-            ))
+            orchestration_declared = declared_orchestration_fields(definition)
             def lane_value(field: str, default: Any = None) -> Any:
                 return definition[field] if field in definition else metadata.get(field, default)
             lanes.append(
@@ -1773,20 +1778,12 @@ def normalize_lane_definitions(
     names = [lane["name"] for lane in lanes]
     if len(names) != len(set(names)):
         fail("Lane names must be unique.")
-    known: set[str] = set()
     all_names = set(names)
     for lane in lanes:
         if "dependsOn" in lane:
             missing = [name for name in lane["dependsOn"] if name not in all_names]
             if missing:
                 fail(f"Lane {lane['name']} dependsOn missing lanes: {', '.join(missing)}")
-            future = [name for name in lane["dependsOn"] if name not in known]
-            if future:
-                fail(
-                    f"Lane {lane['name']} dependencies must appear earlier in lane order: "
-                    + ", ".join(future)
-                )
-        known.add(lane["name"])
     return lanes
 
 
@@ -1916,8 +1913,10 @@ def normalize_execution_policy(raw: dict[str, Any], lanes: list[dict[str, Any]])
         fail(
             "Projectless Session dispatch requires explicit projectlessUserApproved=true."
         )
-    implementation_lanes = [lane["name"] for lane in lanes if lane["kind"] == "implementation"]
-    review_lanes = [lane["name"] for lane in lanes if lane["kind"] == "review"]
+    implementation_lanes = [lane["name"] for lane in lanes if lane["kind"] == "implementation"
+                            or lane.get("writeBoundary") == "approved-target"
+                            or lane.get("semanticAuthority") in {"implement", "define-and-implement"}]
+    review_lanes = [lane["name"] for lane in lanes if is_artifact_review_lane(lane)]
     if independent_review:
         if not implementation_lanes or not review_lanes:
             fail("independentReviewRequired needs implementation and review lanes.")
@@ -2046,6 +2045,9 @@ def apply_orchestration_projection(lanes: list[dict[str, Any]], plan: dict[str, 
             if isinstance(item, dict) and isinstance(item.get("id"), str)
         ]
         lane["capabilityRouteStatus"] = route.get("status", "unbound")
+        lane["capabilityRuntimeReady"] = route.get("runtimeReady", False)
+        if "verificationSubjects" in source and plan.get("policy") != "legacy":
+            lane["verificationSubjects"] = list(source["verificationSubjects"])
 
 
 def find_lane(state: dict[str, Any], lane_name: str) -> dict[str, Any]:
@@ -2219,6 +2221,12 @@ def review_subject_workers(state: dict[str, Any], lane_name: str) -> list[dict[s
     commercial-model reviewer can be proven independent before any final write.
     """
     lane = find_lane(state, lane_name)
+    if "verificationSubjects" in lane:
+        subjects = set(lane["verificationSubjects"])
+        return [
+            worker for worker in state.get("workers", [])
+            if worker_is_current(worker, state["contractRevision"]) and worker.get("lane") in subjects
+        ]
     if lane.get("kind") == "review":
         return approved_target_writers_before_lane(state, lane_name)
     if lane.get("kind") not in DECISION_REVIEW_KINDS:
@@ -2235,10 +2243,17 @@ def review_subject_workers(state: dict[str, Any], lane_name: str) -> list[dict[s
     ]
 
 
+def is_artifact_review_lane(lane: dict[str, Any]) -> bool:
+    return lane.get("kind") == "review" or (
+        lane.get("semanticAuthority") == "verify"
+        and lane.get("verificationScope") != "upstream-decision"
+    )
+
+
 def review_coverage_blockers(
     state: dict[str, Any], review_lane: str, review_workers: list[dict[str, Any]]
 ) -> list[str]:
-    writer_workers = approved_target_writers_before_lane(state, review_lane)
+    writer_workers = review_subject_workers(state, review_lane)
     blockers: list[str] = []
     if not writer_workers:
         blockers.append("Independent review has no preceding current-revision approved-target writer to review.")
@@ -2280,10 +2295,10 @@ def final_review_coverage_blockers(state: dict[str, Any]) -> list[str]:
     }
     legitimately_covered: set[str] = set()
     for lane in lanes:
-        if lane.get("kind") != "review":
+        if not is_artifact_review_lane(lane):
             continue
         preceding_ids = {
-            worker["workerId"] for worker in approved_target_writers_before_lane(state, lane["name"])
+            worker["workerId"] for worker in review_subject_workers(state, lane["name"])
         }
         for reviewer in current_workers:
             if reviewer.get("lane") == lane.get("name"):
@@ -2373,7 +2388,7 @@ def evaluate_gate(
             mode_warning = callback_mode_warning(worker)
             if mode_warning:
                 warnings.append(mode_warning)
-        if lane.get("kind") == "review" and state["executionPolicy"].get("independentReviewRequired"):
+        if is_artifact_review_lane(lane) and state["executionPolicy"].get("independentReviewRequired"):
             blockers.extend(review_coverage_blockers(state, lane["name"], lane_workers))
     if require_target_worker and not include_target_workers and target_index < len(lanes):
         target = lanes[target_index]
@@ -2384,7 +2399,7 @@ def evaluate_gate(
         ]
         if (target.get("workerRequired") or is_semantic_strict(state)) and not target_workers:
             blockers.append(f"Required worker missing for lane: {target.get('name')}")
-        if target.get("kind") == "review" and state["executionPolicy"].get("independentReviewRequired"):
+        if is_artifact_review_lane(target) and state["executionPolicy"].get("independentReviewRequired"):
             blockers.extend(review_coverage_blockers(state, target["name"], target_workers))
     if target_index == len(lanes) and state["executionPolicy"].get("independentReviewRequired"):
         blockers.extend(final_review_coverage_blockers(state))
@@ -2524,21 +2539,15 @@ def init(args: argparse.Namespace) -> None:
         )
     )
     policy = normalize_execution_policy(policy_raw, lanes)
-    orchestration_policy_explicit = isinstance(policy_raw, dict) and "orchestrationPolicy" in policy_raw
-    semantic_orchestration_fields = {
-        "purpose", "contributionRole", "semanticAuthority", "semanticOwner",
-        "dependencyReasons", "inputContracts", "outputContracts", "handoffRisk",
-        "handoffMode", "capabilityRequirements", "capabilityNeeds",
-    }
-    orchestration_contract_present = any(
-        semantic_orchestration_fields & set(lane.get("orchestrationDeclared", []))
-        for lane in lanes
-    )
-    if plan is None and not orchestration_policy_explicit and not orchestration_contract_present:
-        # Existing schema-v2 callers did not know the orchestration contract.
-        # Preserve their historical behavior while making every plan produced
-        # by the updated skill/tool path explicitly strict.
-        policy["orchestrationPolicy"] = "legacy"
+    # New states use the declared/default policy. Compatibility is an explicit
+    # opt-in for new imports, never inferred from an incomplete new plan.
+    if policy["orchestrationPolicy"] != "strict":
+        known: set[str] = set()
+        for lane in lanes:
+            future = [name for name in lane.get("dependsOn", []) if name not in known]
+            if future:
+                fail(f"Lane {lane['name']} dependencies must appear earlier in lane order: " + ", ".join(future))
+            known.add(lane["name"])
     runtime_availability = load_json_value(args.runtime_availability)
     if not isinstance(runtime_availability, dict) or not all(
         isinstance(value, bool) for value in runtime_availability.values()
@@ -2566,6 +2575,9 @@ def init(args: argparse.Namespace) -> None:
             "orchestration_invalid: "
             + json.dumps(orchestration_plan["blockers"], ensure_ascii=False)
         )
+    if policy["orchestrationPolicy"] == "strict" and orchestration_plan["orchestrationExecutable"]:
+        order = {name: index for index, name in enumerate(orchestration_plan["topologicalOrder"])}
+        lanes.sort(key=lambda lane: order[lane["name"]])
     risky = any(lane.get("writeBoundary") == "approved-target" for lane in lanes) or policy.get(
         "independentReviewRequired", False
     )
@@ -2651,6 +2663,8 @@ def init(args: argparse.Namespace) -> None:
         "updated_at": now(),
         "lanes": lanes,
         "workers": [],
+        "dispatchAdmission": "claims-v1" if policy["orchestrationPolicy"] == "strict" else "legacy-registration",
+        "dispatchClaims": [],
         "finalization": {"status": "open"},
         "revisions": [{"revision": 1, "created_at": now(), "reason": "initial contract"}],
     }
@@ -2680,55 +2694,41 @@ def status(args: argparse.Namespace) -> None:
     print(json.dumps(output, ensure_ascii=False, indent=2))
 
 
-def next_lane(args: argparse.Namespace) -> None:
-    state = load_state(Path(args.state).expanduser())
-    require_continuation_state(state)
-    finalization = state.get("finalization", {})
-    if (
-        finalization.get("status") == "finalized"
-        and finalization.get("contractRevision") == state.get("contractRevision")
-    ):
-        print(json.dumps({"status": "finalized", "finalization": finalization}, ensure_ascii=False, indent=2))
-        return
-    for lane in state["lanes"]:
-        if lane["status"] != "done":
-            guard = evaluate_gate(state, lane["name"], require_target_worker=False)
-            if not guard["allowed"]:
-                print(
-                    json.dumps(
-                        {"status": "blocked", "targetLane": lane["name"], "blockers": guard["blockers"]},
-                        ensure_ascii=False,
-                        indent=2,
-                    )
-                )
-                return
-            print(json.dumps(lane, ensure_ascii=False, indent=2))
-            return
-    guard = evaluate_gate(state)
-    status_value = "finalizable" if guard["allowed"] else "blocked"
-    print(
-        json.dumps(
-            {"status": status_value, "blockers": guard["blockers"], "message": "Run finalize after final gate passes."},
-            ensure_ascii=False,
-            indent=2,
-        )
-    )
+def finalization_gate(state: dict[str, Any]) -> dict[str, Any]:
+    """The same terminal check is used by scheduling and actual finalization."""
+    incomplete = [lane["name"] for lane in state.get("lanes", []) if lane.get("status") != "done"]
+    blockers = ["finalize requires all lanes done: " + ", ".join(incomplete)] if incomplete else []
+    if reserved_claims(state):
+        blockers.append("Unreconciled dispatch claims remain; bind or reconcile host creation before finalization.")
+    if active_workers(state):
+        blockers.append("Active worker attempts remain.")
+    if not incomplete:
+        blockers.extend(evaluate_gate(state)["blockers"])
+    return {"allowed": not blockers, "blockers": blockers}
 
 
-def ready_lanes(args: argparse.Namespace) -> None:
-    """Return the dependency-ready dispatch frontier, bounded by worker capacity."""
-    state = load_state(Path(args.state).expanduser())
+def dispatch_frontier(state: dict[str, Any]) -> dict[str, Any]:
+    """Classify every unfinished lane; no empty-queue inference of completion."""
     require_continuation_state(state)
     policy = state.get("executionPolicy", {})
-    max_parallel = policy.get("maxParallelWorkers", 1)
-    if not isinstance(max_parallel, int) or max_parallel < 1:
-        max_parallel = 1
-    active = [lane for lane in state.get("lanes", []) if lane.get("status") == "running"]
-    available_slots = max(0, max_parallel - len(active))
+    slots = capacity(state)
+    available_slots = slots["availableSlots"]
+    active = active_workers(state)
+    claims = reserved_claims(state)
+    occupied_lanes = {worker.get("lane") for worker in active} | {claim.get("lane") for claim in claims}
     ready: list[dict[str, Any]] = []
     blocked: list[dict[str, Any]] = []
     for lane in state.get("lanes", []):
-        if lane.get("status") != "pending":
+        if lane.get("status") == "done" or lane["name"] in occupied_lanes:
+            continue
+        if lane.get("status") not in {"pending", "stale"}:
+            attempts = lane_attempts(state, lane["name"])
+            action = "complete-lane" if attempts and all(worker.get("status") == "done" for worker in attempts) else "resolve-or-revise"
+            blocked.append({"lane": lane["name"], "status": lane.get("status"), "action": action,
+                            "blockers": [f"Lane requires {action}: {lane['name']} ({lane.get('status')})"]})
+            continue
+        if lane_attempts(state, lane["name"]):
+            blocked.append({"lane": lane["name"], "action": "complete-or-supersede-worker", "blockers": ["Current worker attempt already exists."]})
             continue
         guard = evaluate_gate(state, lane["name"], require_target_worker=False)
         if guard["allowed"]:
@@ -2736,37 +2736,65 @@ def ready_lanes(args: argparse.Namespace) -> None:
         else:
             blocked.append({"lane": lane["name"], "blockers": guard["blockers"]})
     selected = ready[:available_slots]
+    coordination_lanes = list(dict.fromkeys([worker.get("lane", "") for worker in active] + [lane["name"] for lane in selected]))
+    wait_lane_batches = [
+        coordination_lanes[index : index + MAX_WAIT_TARGETS_PER_CALL]
+        for index in range(0, len(coordination_lanes), MAX_WAIT_TARGETS_PER_CALL)
+    ]
+    guard = finalization_gate(state)
+    finalization = state.get("finalization", {})
+    finalized = (
+        finalization.get("status") == "finalized"
+        and finalization.get("contractRevision") == state["contractRevision"]
+        and guard["allowed"]
+    )
     status_value = (
-        "ready"
-        if selected
-        else "waiting"
-        if active
-        else "blocked"
-        if blocked
-        else "finalizable"
+        "finalized" if finalized else "ready" if selected
+        else "waiting" if active or claims else "finalizable" if guard["allowed"] else "blocked"
     )
-    print(
-        json.dumps(
-            {
-                "status": status_value,
-                "maxParallelWorkers": max_parallel,
-                "activeWorkers": len(active),
-                "availableSlots": available_slots,
-                "readyLanes": selected,
-                "deferredReadyLanes": ready[available_slots:],
-                "blockedLanes": blocked,
-                "orchestration": {
-                    "policy": policy.get("orchestrationPolicy", "legacy"),
-                    "semanticOwnerLane": state.get("orchestrationPlan", {}).get("semanticOwnerLane", ""),
-                    "activeWave": min((lane.get("orchestrationWave", 0) for lane in selected), default=0),
-                    "parallelFrontier": [lane.get("name", "") for lane in selected],
-                    "serialEdges": state.get("orchestrationPlan", {}).get("serialEdges", []),
-                },
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-    )
+    return {
+        "status": status_value,
+        **slots,
+        "readyLanes": selected,
+        "deferredReadyLanes": ready[available_slots:],
+        "blockedLanes": blocked,
+        "pendingDispatchClaims": claims,
+        "stoppingWorkers": [
+            {"workerId": worker["workerId"], "lane": worker["lane"],
+             "runtimeHandle": worker.get("runtimeHandle", ""), "action": "confirm-host-stop"}
+            for worker in active if worker.get("runtimeStopPending") is True
+        ],
+        "finalizationBlockers": guard["blockers"],
+        "waitCoordination": {
+            "maxTargetsPerCall": MAX_WAIT_TARGETS_PER_CALL,
+            "requiresBatching": len(coordination_lanes) > MAX_WAIT_TARGETS_PER_CALL,
+            "laneBatches": wait_lane_batches,
+            "policy": "stable-rotation-after-completion-or-timeout",
+        },
+        "orchestration": {
+            "policy": policy.get("orchestrationPolicy", "legacy"),
+            "semanticOwnerLane": state.get("orchestrationPlan", {}).get("semanticOwnerLane", ""),
+            "activeWave": min((lane.get("orchestrationWave", 0) for lane in selected), default=0),
+            "parallelFrontier": [lane.get("name", "") for lane in selected],
+            "serialEdges": state.get("orchestrationPlan", {}).get("serialEdges", []),
+        },
+    }
+
+
+def next_lane(args: argparse.Namespace) -> None:
+    state = load_state(Path(args.state).expanduser())
+    frontier = dispatch_frontier(state)
+    if frontier["readyLanes"]:
+        output = {**frontier["readyLanes"][0], "schedulingStatus": "ready"}
+    else:
+        output = frontier
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+
+
+def ready_lanes(args: argparse.Namespace) -> None:
+    """Read the shared scheduling result; actual dispatch still needs admission."""
+    state = load_state(Path(args.state).expanduser())
+    print(json.dumps(dispatch_frontier(state), ensure_ascii=False, indent=2))
 
 
 def complete_lane(args: argparse.Namespace) -> None:
@@ -3000,6 +3028,54 @@ def packet_lane_boundary(packet: dict[str, Any]) -> str:
     return "read-only" if boundary == "none" else boundary
 
 
+def claim_dispatch(args: argparse.Namespace) -> None:
+    """Reserve capacity before calling a host's non-idempotent task creation tool."""
+    path = Path(args.state).expanduser()
+    state = load_state(path)
+    require_continuation_state(state)
+    lane = find_lane(state, args.lane)
+    request_id = require_nonempty(args.request_id, "requestId")
+    existing = any(item.get("requestId") == request_id for item in state.get("dispatchClaims", []))
+    evidence = load_json_value(args.capability_evidence)
+    if not isinstance(evidence, dict) or any(not isinstance(key, str) or not isinstance(value, str) or not value.strip() for key, value in evidence.items()):
+        fail("capabilityEvidence must map capability IDs to non-empty host-discovery evidence.")
+    if not existing:
+        require_approved_target_authorization(state, lane)
+        if lane.get("status") not in {"pending", "stale"}:
+            fail("lane_not_dispatchable: complete or explicitly supersede/revise the current attempt")
+        guard = evaluate_gate(state, lane["name"], require_target_worker=False)
+        if not guard["allowed"]:
+            fail("upstream_gate_blocked: " + "; ".join(guard["blockers"]))
+        if state.get("executionPolicy", {}).get("orchestrationPolicy") == "strict":
+            if lane.get("capabilityRouteStatus") != "bound" or not lane.get("capabilityBindings"):
+                fail("capability_unbound: choose exact lane capabilities before dispatch")
+            route = next((item for item in state.get("orchestrationPlan", {}).get("capabilityRoutes", []) if item.get("lane") == lane["name"]), {})
+            unverified = {item["id"] for item in route.get("selected", []) if item.get("availability") != "confirmed"}
+            missing = sorted(unverified - set(evidence))
+            if missing:
+                fail("capability_runtime_unverified: provide host-discovery evidence for " + ", ".join(missing))
+    try:
+        claim = reserve_dispatch(state, lane["name"], request_id, evidence, now())
+    except AdmissionError as error:
+        fail(str(error))
+    if not existing:
+        save_state(path, state)
+    action = "create" if not existing else "already-registered" if claim["status"] == "bound" else "reconcile-existing-creation"
+    print(json.dumps({**claim, "creationAction": action, "capacity": capacity(state)}, ensure_ascii=False, indent=2))
+
+
+def release_dispatch_command(args: argparse.Namespace) -> None:
+    path = Path(args.state).expanduser()
+    state = load_state(path)
+    require_continuation_state(state)
+    try:
+        claim = release_dispatch(state, args.claim_id, args.outcome, require_nonempty(args.evidence, "evidence"), now())
+    except AdmissionError as error:
+        fail(str(error))
+    save_state(path, state)
+    print(json.dumps(claim, ensure_ascii=False, indent=2))
+
+
 def register_worker(args: argparse.Namespace) -> None:
     path = Path(args.state).expanduser()
     state = load_state(path)
@@ -3190,8 +3266,8 @@ def register_worker(args: argparse.Namespace) -> None:
     if write_boundary == "approved-target" and (not tool_profile or not credential_policy):
         fail("approved-target workers require non-empty toolProfile and credentialPolicy.")
     reviews_worker_ids = parse_csv(args.reviews_worker_ids)
-    if lane.get("kind") == "review":
-        writer_workers = approved_target_writers_before_lane(state, lane["name"])
+    if is_artifact_review_lane(lane):
+        writer_workers = review_subject_workers(state, lane["name"])
         known_ids = {worker["workerId"] for worker in writer_workers}
         unknown = sorted(set(reviews_worker_ids) - known_ids)
         if unknown:
@@ -3250,6 +3326,7 @@ def register_worker(args: argparse.Namespace) -> None:
         "threadId": thread_id,
         "runtimeHandle": runtime_handle,
         "requestId": request_id,
+        "dispatchClaimId": (args.claim_id or "").strip(),
         "contractRevision": revision,
         "contractDigest": contract_digest,
         "deliverableFingerprint": deliverable_fingerprint,
@@ -3295,7 +3372,18 @@ def register_worker(args: argparse.Namespace) -> None:
         "created_at": now(),
         "updated_at": now(),
     }
+    claim_id = (args.claim_id or "").strip()
+    if lane.get("status") not in {"pending", "stale", "running"}:
+        fail("lane_not_dispatchable: explicitly supersede/revise before retrying a failed or blocked lane")
+    if is_independent_runtime and state.get("dispatchAdmission") == "claims-v1" and not claim_id:
+        fail("dispatch_claim_required: reserve capacity before creating the worker task")
+    try:
+        claim = registration_claim(state, lane["name"], request_id, claim_id)
+    except AdmissionError as error:
+        fail(str(error))
     workers.append(worker)
+    if claim is not None:
+        claim.update(status="bound", workerId=worker_id, runtimeHandle=runtime_handle, updated_at=now())
     lane["status"] = "running"
     lane["completed_at"] = ""
     save_state(path, state)
@@ -3313,6 +3401,22 @@ def update_worker(args: argparse.Namespace) -> None:
         fail("Old-revision workers cannot be updated as active workers.")
     if args.status == "done" or args.decision == "pass":
         fail("Use record-callback to set a worker done/pass.")
+    stop_evidence = (args.runtime_stop_evidence or "").strip()
+    if stop_evidence and args.status not in {"superseded", "stale", "resolved"}:
+        fail("runtimeStopEvidence is only accepted when retiring a worker.")
+    if args.status in {"pending", "running"} and worker.get("status") not in {"pending", "running"}:
+        if find_lane(state, worker["lane"]).get("status") == "done":
+            fail("Cannot reactivate a worker for a completed lane; revise the contract first.")
+        try:
+            require_admission({**state, "workers": [item for item in state.get("workers", []) if item is not worker]}, worker["lane"])
+        except AdmissionError as error:
+            fail(str(error))
+    if args.status in {"superseded", "stale", "resolved"}:
+        if stop_evidence:
+            worker["runtimeStopPending"] = False
+            worker["runtimeStopEvidence"] = stop_evidence
+        elif worker.get("status") in {"pending", "running"}:
+            worker["runtimeStopPending"] = True
     worker["status"] = args.status
     if args.artifact:
         worker["artifact"] = args.artifact
@@ -3323,6 +3427,15 @@ def update_worker(args: argparse.Namespace) -> None:
     if args.notes:
         worker["notes"] = args.notes
     worker["updated_at"] = now()
+    if args.status in {"superseded", "stale", "resolved"} and worker.get("contractRevision") == state["contractRevision"]:
+        lane = find_lane(state, worker["lane"])
+        if lane.get("status") != "done" and not lane_attempts(state, lane["name"]):
+            # This is an explicit lifecycle action, not an automatic retry of
+            # blocked/needs-work callbacks. Contract corrections use revision.
+            lane["status"] = "pending"
+            lane["decision"] = ""
+            lane["completed_at"] = ""
+    invalidate_finalization(state, f"worker updated: {worker['workerId']}")
     save_state(path, state)
     print(json.dumps(worker, ensure_ascii=False, indent=2))
 
@@ -3952,10 +4065,7 @@ def finalize(args: argparse.Namespace) -> None:
     path = Path(args.state).expanduser()
     state = load_state(path)
     require_continuation_state(state)
-    incomplete = [lane["name"] for lane in state.get("lanes", []) if lane.get("status") != "done"]
-    if incomplete:
-        fail("finalize requires all lanes done: " + ", ".join(incomplete))
-    guard = evaluate_gate(state)
+    guard = finalization_gate(state)
     if not guard["allowed"]:
         fail("final_gate_blocked: " + "; ".join(guard["blockers"]))
     finalization = {
@@ -4160,6 +4270,8 @@ def revise_contract(args: argparse.Namespace) -> None:
                 (index for index, lane in enumerate(lanes) if lane.get("name") == worker.get("lane")), invalid_index
             )
             if worker_lane_index >= invalid_index:
+                if worker.get("status") in {"pending", "running"}:
+                    worker["runtimeStopPending"] = True
                 worker["status"] = "superseded"
                 worker["decision"] = ""
                 worker["supersededAtRevision"] = new_revision
@@ -4177,6 +4289,8 @@ def revise_contract(args: argparse.Namespace) -> None:
     if new_plan is not None:
         for worker in state.get("workers", []):
             if worker.get("packetDigest") in old_packet_digests:
+                if worker.get("status") in {"pending", "running"}:
+                    worker["runtimeStopPending"] = True
                 worker["status"] = "superseded"
                 worker["decision"] = ""
                 worker["supersededAtRevision"] = new_revision
@@ -4345,6 +4459,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--thread-id", default="")
     p.add_argument("--runtime-handle", default="")
     p.add_argument("--request-id", default="")
+    p.add_argument("--claim-id", default="")
     p.add_argument("--contract-revision", type=int, default=0)
     p.add_argument("--contract-digest", default="")
     p.add_argument("--deliverable-fingerprint", default="")
@@ -4372,6 +4487,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.set_defaults(func=register_worker)
 
+    p = sub.add_parser("claim-dispatch")
+    p.add_argument("--state", required=True)
+    p.add_argument("--lane", required=True)
+    p.add_argument("--request-id", required=True)
+    p.add_argument("--capability-evidence", default="{}", help="Capability ID to host-discovery evidence JSON object")
+    p.set_defaults(func=claim_dispatch)
+
+    p = sub.add_parser("release-dispatch")
+    p.add_argument("--state", required=True)
+    p.add_argument("--claim-id", required=True)
+    p.add_argument("--outcome", required=True, choices=["not-created", "stopped"])
+    p.add_argument("--evidence", required=True)
+    p.set_defaults(func=release_dispatch_command)
+
     p = sub.add_parser("update-worker")
     p.add_argument("--state", required=True)
     p.add_argument("--worker-id", required=True)
@@ -4379,6 +4508,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--artifact", default="")
     p.add_argument("--decision", choices=["", "needs-work", "blocked"], default="")
     p.add_argument("--notes", default="")
+    p.add_argument("--runtime-stop-evidence", default="", help="Host evidence that a retired worker is no longer running")
     p.set_defaults(func=update_worker)
 
     p = sub.add_parser("list-workers")

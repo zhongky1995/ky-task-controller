@@ -110,10 +110,13 @@ class ClientPricingPlanTests(unittest.TestCase):
 
     def register_worker(self, state: dict, lane: str, worker_id: str, runtime_handle: str, *extra: str) -> dict:
         packet = state["workerPackets"][lane]
+        definition = next(item for item in state["lanes"] if item["name"] == lane)
+        claim = self.output(self.command("claim-dispatch", "--state", str(self.state), "--lane", lane, "--request-id", "request-" + worker_id, "--capability-evidence", json.dumps({item: "synthetic host capability available" for item in definition["capabilityBindings"]})))
         return self.output(self.command(
             "register-worker", "--state", str(self.state), "--worker-id", worker_id,
             "--lane", lane, "--lane-runtime", "managed_agent_worker",
             "--request-id", "request-" + worker_id, "--runtime-handle", runtime_handle,
+            "--claim-id", claim["claimId"],
             "--thread-tool-check", "checked", "--callback-mode-expected", "managed_result_collected",
             "--packet-id", packet["packetId"], "--packet-digest", packet["packetDigest"],
             "--contract-digest", state["contractDigest"],
@@ -267,6 +270,7 @@ class ClientPricingPlanTests(unittest.TestCase):
         }
         result = self.command(
             "init", "--state", str(self.state), "--goal", "manual quote",
+            "--orchestration-policy", "legacy",
             "--lane-definitions", json.dumps([
                 {"name": "pricing-model", "kind": "modeling"},
                 {"name": "implementation", "kind": "implementation", "writeBoundary": "approved-target"},

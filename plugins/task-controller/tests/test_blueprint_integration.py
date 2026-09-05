@@ -78,6 +78,10 @@ class BlueprintIntegrationTests(unittest.TestCase):
         self.state = Path(self.temp_dir.name) / "state.json"
 
     def command(self, command: str, *args: str, ok: bool = True) -> subprocess.CompletedProcess[str]:
+        # These manually ordered fixtures test Blueprint semantic lineage, not
+        # strict lane decomposition. Compatibility must now be explicit.
+        if command == "init":
+            args = (*args, "--orchestration-policy", "legacy")
         result = subprocess.run(
             [sys.executable, str(HELPER), command, *args],
             cwd=self.temp_dir.name,
@@ -111,6 +115,8 @@ class BlueprintIntegrationTests(unittest.TestCase):
         )
 
     def mcp_call(self, name: str, arguments: dict) -> dict:
+        if name == "task_controller_init":
+            arguments = {**arguments, "executionPolicy": {"orchestrationPolicy": "legacy"}}
         request = json.dumps(
             {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": arguments}}
         ) + "\n"

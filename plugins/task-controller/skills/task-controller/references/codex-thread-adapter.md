@@ -97,7 +97,7 @@ Do not use `thread_tools_unavailable` until tool discovery has been attempted.
 For each native worker lane:
 
 1. Resolve the saved project and choose `local` or project `worktree` environment.
-2. Create or identify the worker thread with Codex host tools using the locked project target.
+2. Claim the lane and slot with `task_controller_claim_dispatch` before host creation. Follow `dispatch-and-recovery.md`: only `creationAction: create` permits creation with the locked project target; repeated claims require host reconciliation.
 3. Verify the created thread reports the locked `projectId`.
 4. Send a narrow worker prompt that includes:
    - `controller_thread_id`
@@ -107,6 +107,7 @@ For each native worker lane:
    - `to_lane: KY-TASK00-总控-任务伙伴`
    - `callback_mode_expected: active_message_required`
 5. Register the worker with KY-TASK:
+   - `claimId: <pre-creation claim id>` and its matching `requestId`
    - `laneRuntime: native_thread_lane`
    - `threadId: <created-or-identified Codex thread id>`
    - `runtimeHandle: <the exact same Codex thread id>`
@@ -119,6 +120,18 @@ For each native worker lane:
 6. Wait for the worker to actively message the callback to `reply_to_thread_id`.
 7. Record callback with `callbackModeObserved: active_message`.
 8. Run `task_controller_gate_check` before the next lane.
+
+The task graph has no total Lane-count cap. The controller may keep up to the
+task policy's ten-worker maximum active, but each host wait call accepts at most
+eight targets. For nine or ten active workers, use stable wait batches of at
+most eight and rotate batches after a completion or bounded timeout. Do not
+stop active Sessions merely to fit one wait call.
+
+The grouping is advisory coordination output; the controller owns the host
+wait calls and cursors. A pending worktree `clientThreadId` must not be bound as
+a real `threadId`. Keep the original claim occupied until setup yields an actual
+thread, or reconcile and release only after confirming no task was created or
+that it stopped. A timed-out create call is not permission to create again.
 
 Under this Session-first policy, every distributed lane enters this native dispatch flow. A managed worker is invalid unless the user explicitly overrides the task to `runtimeSelectionPolicy: lane_lifecycle`.
 

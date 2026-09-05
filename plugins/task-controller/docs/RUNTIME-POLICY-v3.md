@@ -63,8 +63,29 @@ Every new lane declares `dependsOn`:
 ```
 
 `task_controller_ready_lanes` returns the current dependency frontier, bounded
-by `maxParallelWorkers`. The controller creates every Session in that frontier
-before waiting. As workers finish, it records callbacks and refills open slots.
+by `maxParallelWorkers`. Before each host creation, the controller atomically
+reserves a lane/slot with `task_controller_claim_dispatch`. Only a new claim with
+`creationAction: create` permits creation; registration binds its `claimId`.
+As workers finish, record callbacks, complete accepted lanes, and refill slots.
+
+The task graph itself has no four-lane or ten-lane cap. The distribution keeps
+four as the conservative default for simultaneous workers, while an explicit
+task policy may raise `maxParallelWorkers` to ten. Codex wait coordination
+accepts at most eight targets per call, so nine or ten active Sessions are
+waited in stable batches of at most eight without reducing their actual
+concurrency.
+
+`task_controller_ready_lanes` exposes this as `waitCoordination`, including
+`maxTargetsPerCall`, `requiresBatching`, and stable `laneBatches` for the active
+plus newly ready frontier.
+
+This is grouping output, not an automatic host wait loop. The controller owns
+host calls and cursors. Live attempts plus unbound claims consume capacity;
+running lane labels do not. New strict states require pre-creation claims,
+while legacy registration still enforces the capacity and single-attempt gates.
+An uncertain claim never expires automatically. Reconcile it before release.
+Superseding a running worker preserves its capacity until host stop evidence
+is recorded. See the skill's `dispatch-and-recovery.md` for exact transitions.
 
 Missing `dependsOn` preserves the old ordered-lane chain for legacy states.
 New plans must not rely on list order as an implicit dependency graph.

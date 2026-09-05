@@ -106,8 +106,11 @@ Verification consumes something that exists:
 
 - decision review depends on the decision model it reviews and declares
   `verificationScope: upstream-decision`;
-- sample review depends on the sample;
-- artifact QA/readback depends on the relevant writer;
+- sample/module review declares `verificationScope: intermediate-artifact` and
+  names the produced artifacts under `inputContracts`; its compiled
+  `verificationSubjects` contain only those upstream producers;
+- artifact QA/readback depends on the relevant writer, not unrelated branches
+  or production that occurs after the sample gate;
 - final review depends on every final writer it covers.
 
 A QA lane that runs beside primary design and then becomes an input to the writer
@@ -144,7 +147,14 @@ domain keyword. Match each lane from:
 Use exact `capabilityRequirements` when the capability is known. Use
 `capabilityNeeds` to describe a required profile when discovery is still needed.
 An unavailable exact requirement blocks strict orchestration. Suggestions are not
-bindings until the controller selects and records one.
+bindings until the controller selects and records one; `suggested` and `unbound`
+worker routes block strict execution. Role and catalog priority alone cannot
+produce a recommendation without matching job/input/output evidence.
+
+Exact binding and host availability are separate. Missing runtime information is
+`unverified`, not available; check `runtimeReady` and provide actual host-discovery
+evidence at dispatch admission. Catalog IDs can describe external skills without
+pretending those skills were probed by the plugin.
 
 ## Runtime Comes Last
 
@@ -199,7 +209,13 @@ For a new multi-lane task:
 7. Match capabilities per lane.
 8. Run `task_controller_plan_orchestration` in strict mode.
 9. Fix every blocker before `task_controller_init` or Session creation.
-10. Select lifecycle/runtime and dispatch the ready wave.
+10. Select lifecycle/runtime, claim capacity before host creation, then dispatch
+    the admitted frontier (see `dispatch-and-recovery.md`).
+
+New initialization defaults to strict. `plan-orchestration`, initialization, and
+insertion retain original declaration provenance: defaults do not satisfy a
+missing/blank required field. Explicit `orchestrationPolicy: legacy` is only for
+deliberate compatibility imports; existing state reads do not migrate silently.
 
 When no scenario pack matches, use this generic flow. Do not invent a new domain
 pack merely to obtain a graph, and do not fall back to the historical five-lane

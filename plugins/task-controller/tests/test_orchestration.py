@@ -62,6 +62,50 @@ def lane(
 
 
 class OrchestrationPlanTests(unittest.TestCase):
+    def test_intermediate_review_only_depends_on_the_artifact_it_judges(self) -> None:
+        lanes = [
+            lane("design", role="primary", authority="define", owner=True, depends=[], capability="design", outputs=["spec"]),
+            lane("sample", role="primary", authority="implement", depends=["design"], capability="writer", inputs=["spec"], outputs=["sample-artifact"], boundary="approved-target", targets=["sample-target"], handoff_risk="low", handoff_mode="artifact-contract"),
+            lane("sample-review", role="verification", authority="verify", depends=["sample"], capability="reviewer", inputs=["sample-artifact"], outputs=["sample-verdict"], boundary="review-only", verification_scope="intermediate-artifact"),
+            lane("production", role="primary", authority="implement", depends=["sample-review"], capability="writer", inputs=["sample-verdict"], outputs=["final-artifact"], boundary="approved-target", targets=["final-target"], handoff_risk="low", handoff_mode="artifact-contract"),
+            lane("final-review", role="verification", authority="verify", depends=["production"], capability="reviewer", inputs=["final-artifact"], boundary="review-only"),
+        ]
+        plan = compile_orchestration_plan(lanes, active_capability_ids={"design", "writer", "reviewer"})
+        self.assertTrue(plan["orchestrationExecutable"], plan["blockers"])
+        self.assertEqual(["sample"], plan["lanes"][2]["verificationSubjects"])
+        self.assertEqual(["sample", "production"], plan["lanes"][4]["verificationSubjects"])
+        lanes[2]["inputContracts"] = []
+        invalid = compile_orchestration_plan(lanes, active_capability_ids={"design", "writer", "reviewer"})
+        self.assertIn("verification_subject_required", [item["code"] for item in invalid["blockers"]])
+
+    def test_unrelated_capabilities_are_not_suggested_or_executable(self) -> None:
+        lanes = [lane("design", role="primary", authority="define", owner=True, depends=[], capability="")]
+        lanes[0]["capabilityRequirements"] = []
+        lanes[0]["capabilityNeeds"] = ["quantum-teleportation-controller"]
+        for authority in ("define", "verify"):
+            lanes[0]["semanticAuthority"] = authority
+            plan = compile_orchestration_plan(lanes)
+            self.assertEqual([], plan["capabilityRoutes"][0]["suggestions"])
+            self.assertFalse(plan["orchestrationExecutable"])
+            self.assertIn("capability_unbound", [item["code"] for item in plan["blockers"]])
+
+    def test_relevant_suggestions_are_a_draft_not_an_execution_binding(self) -> None:
+        definition = lane("research", role="primary", authority="define", owner=True, depends=[], capability="")
+        definition.update(capabilityRequirements=[], capabilityNeeds=["evidence-analysis"])
+        plan = compile_orchestration_plan([definition])
+        self.assertEqual("suggested", plan["capabilityRoutes"][0]["status"])
+        self.assertTrue(all(item["reasons"] for item in plan["capabilityRoutes"][0]["suggestions"]))
+        self.assertFalse(plan["orchestrationExecutable"])
+
+    def test_binding_does_not_claim_unknown_host_availability(self) -> None:
+        definition = lane("design", role="primary", authority="define", owner=True, depends=[], capability="external-skill")
+        plan = compile_orchestration_plan([definition], active_capability_ids={"external-skill"})
+        self.assertTrue(plan["orchestrationExecutable"], plan["blockers"])
+        self.assertFalse(plan["runtimeReady"])
+        self.assertEqual("unverified", plan["capabilityRoutes"][0]["selected"][0]["availability"])
+        confirmed = compile_orchestration_plan([definition], active_capability_ids={"external-skill"}, runtime_availability={"external-skill": True})
+        self.assertTrue(confirmed["runtimeReady"])
+
     def test_parallel_frontier_and_serial_join_are_planned_separately(self) -> None:
         lanes = [
             lane("evidence", role="prerequisite", authority="constrain", depends=[], capability="evidence-skill", outputs=["evidence-ledger"]),
@@ -214,6 +258,45 @@ class OrchestrationIntegrationTests(unittest.TestCase):
         ready = json.loads(self.command("ready-lanes", "--state", str(self.state)).stdout)
         self.assertEqual(["evidence", "audience"], [item["name"] for item in ready["readyLanes"]])
         self.assertEqual(1, ready["orchestration"]["activeWave"])
+
+    def test_plan_and_init_reject_the_same_missing_or_blank_fields(self) -> None:
+        for field in ("purpose", "contributionRole", "semanticAuthority", "dependsOn"):
+            for blank in (False, True):
+                with self.subTest(field=field, blank=blank):
+                    lanes = self.strict_lanes()
+                    if blank:
+                        lanes[0][field] = None if field == "dependsOn" else "  "
+                    else:
+                        lanes[0].pop(field)
+                    plan = compile_orchestration_plan(lanes, active_capability_ids={"evidence-skill", "audience-skill", "synthesis-skill", "review-skill"})
+                    self.assertIn({"code": "orchestration_field_required", "lane": "evidence", "field": field}, plan["blockers"])
+                    result = self.command("init", "--state", str(self.state), "--goal", "invalid plan", "--lane-definitions", json.dumps(lanes), "--active-capability-ids", "evidence-skill,audience-skill,synthesis-skill,review-skill", ok=False)
+                    self.assertIn("orchestration_field_required", result.stderr)
+                    self.assertFalse(self.state.exists())
+
+    def test_new_composite_plan_does_not_silently_select_legacy(self) -> None:
+        definitions = [{"name": "design", "kind": "design"}, {"name": "research", "kind": "research"}]
+        result = self.command("init", "--state", str(self.state), "--goal", "new plan", "--lane-definitions", json.dumps(definitions), ok=False)
+        self.assertIn("orchestration_invalid", result.stderr)
+        legacy = self.command("init", "--state", str(self.state), "--goal", "explicit legacy import", "--lane-definitions", json.dumps(definitions), "--orchestration-policy", "legacy")
+        self.assertEqual("legacy", json.loads(legacy.stdout)["executionPolicy"]["orchestrationPolicy"])
+
+    def test_valid_dag_is_initialized_in_compiled_order_not_input_list_order(self) -> None:
+        lanes = list(reversed(self.strict_lanes()))
+        active = {"evidence-skill", "audience-skill", "synthesis-skill", "review-skill"}
+        plan = compile_orchestration_plan(lanes, active_capability_ids=active)
+        self.assertTrue(plan["orchestrationExecutable"], plan["blockers"])
+        state = json.loads(self.command("init", "--state", str(self.state), "--goal", "unordered valid DAG", "--lane-definitions", json.dumps(lanes), "--active-capability-ids", ",".join(sorted(active))).stdout)
+        self.assertEqual(plan["topologicalOrder"], [item["name"] for item in state["lanes"]])
+        self.assertEqual(set(plan["waves"][0]["lanes"]), {item["name"] for item in json.loads(self.command("ready-lanes", "--state", str(self.state)).stdout)["readyLanes"]})
+
+    def test_strict_insert_preserves_original_field_provenance(self) -> None:
+        definition = lane("design", role="primary", authority="define", owner=True, depends=[], capability="design-skill")
+        self.command("init", "--state", str(self.state), "--goal", "insert validation", "--lane-definitions", json.dumps([definition]), "--active-capability-ids", "design-skill")
+        before = self.state.read_bytes()
+        invalid = self.command("insert-lane", "--state", str(self.state), "--lane", "research", "--kind", "research", "--independent", "--contribution-role", "prerequisite", "--semantic-authority", "constrain", ok=False)
+        self.assertIn('"field": "purpose"', invalid.stderr)
+        self.assertEqual(before, self.state.read_bytes())
 
     def test_mcp_exposes_read_only_orchestration_tool(self) -> None:
         request = json.dumps({

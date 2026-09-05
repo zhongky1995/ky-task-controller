@@ -57,7 +57,7 @@ Use independent workers when at least two of these are true:
 
 If project discovery or native Session tools are unavailable, stop and report the blocker. Do not silently switch to managed subagents, sequential execution, or projectless Sessions under the installed policies.
 
-Before declaring real workers unavailable, check managed-agent capabilities first. Check or discover Codex Desktop creation/messaging tools only when the user explicitly requested a sidebar-visible task.
+Under `native_session_required`, check native project/creation/messaging/wait tools first. Managed agents are checked only for an explicit `lane_lifecycle` override; they are not an automatic fallback. Task creation still requires the user's task-scoped sidebar Session approval.
 
 When Codex thread tools are the intended runtime, record the adapter capability state from `codex-thread-adapter.md` in the split decision and in each worker registration `threadToolCheck`.
 
@@ -280,7 +280,7 @@ Before dispatching workers, output:
 - 合并方式:
 ```
 
-After execution is approved, call `task_controller_ready_lanes`. Create one sidebar-visible native task for every returned lane before waiting for any result. The task-scoped `nativeThreadUserApproved: true` record covers these KY-TASK distributed Sessions.
+After execution is approved, call `task_controller_ready_lanes`, then claim each selected lane with `task_controller_claim_dispatch`. Only `creationAction: create` permits one new sidebar task. Reconcile repeated/uncertain requests without duplicating creation. The task-scoped `nativeThreadUserApproved: true` record covers these KY-TASK distributed Sessions. Read `dispatch-and-recovery.md` for admission and recovery.
 
 Before that dispatch, call `list_projects` and resolve exactly one saved project. Prefer the controller thread's non-empty `projectId`. If it is empty, match the effective workspace, source-material path, or durable target to the deepest saved project path. If no unique project can be established, stop and ask the user; do not use `projectless` as a convenience fallback.
 
@@ -294,6 +294,7 @@ When the user explicitly requests real Codex Desktop sidebar tasks, use:
 The controller should register each native lane thread with KY-TASK state:
 
 - `workerId`: thread id or stable lane id
+- `claimId` and the matching `requestId`: the pre-creation reservation
 - `threadId`: required Codex thread id
 - `runtimeHandle`: required and exactly equal to `threadId`; native aliases are not accepted
 - `projectTargetType`: required; `project` under the Session-first policy
@@ -310,10 +311,10 @@ Minimum dispatch sequence for mandatory split tasks:
 1. Check `list_projects` plus native thread creation, messaging, listing, and wait tools.
 2. Resolve and lock `targetProjectId`; initialize distributed state only after this succeeds.
 3. Call `task_controller_ready_lanes`.
-4. Create every worker in the returned ready batch with `target: {type: "project", projectId, environment}`, up to `maxParallelWorkers`.
+4. Atomically claim each ready lane; for `creationAction: create`, create its worker with `target: {type: "project", projectId, environment}`. Claims and live attempts together consume `maxParallelWorkers`.
 5. Verify each new thread reports the locked `projectId`. A mismatched or empty project is a blocker and must not be registered as valid.
-6. Send each worker a narrow prompt and register it in KY-TASK state with project identity.
-7. Only after the whole batch is dispatched, call `wait_threads` with all active targets.
+6. Send each worker a narrow prompt and register it with project identity, `claimId`, and `requestId`.
+7. After the admitted batch is dispatched, call host waits with at most eight targets per call. The plugin supplies a grouping plan, not an automatic wait loop; the controller retains cursors and rotates groups.
 8. Record each callback as workers finish and refill open slots from the next ready frontier.
 9. Run the relevant dependency gate before downstream implementation.
 
@@ -343,7 +344,8 @@ When the task is in `distributed` mode, both ephemeral and persistent lanes use 
 - Verification consumes the decision, sample, readback, or artifact it judges. It cannot run early and then dictate an artifact that does not yet exist.
 - Build the primary semantic path first, then attach prerequisite/supporting work whose outputs it actually consumes.
 - Dispatch all lanes returned by `task_controller_ready_lanes` before waiting.
-- Default concurrency is four Sessions; never exceed `executionPolicy.maxParallelWorkers`.
+- Total Lane count is not capped. Default concurrency is four Sessions; an explicit task may set `executionPolicy.maxParallelWorkers` as high as ten.
+- Codex wait coordination accepts at most eight targets per call. If nine or ten Sessions are active, keep all of them running and rotate stable wait batches of at most eight; do not lower the active frontier merely to fit one wait call.
 - Do not add a dependency only to make the diagram tidy. Add it only when a lane consumes the upstream artifact, shares a write target, or must wait for approval.
 - Lanes that can read the same immutable source independently should normally be siblings in the same frontier.
 - Writers to the same durable target are never parallel. Review depends on every writer it must cover.
@@ -400,7 +402,7 @@ If any worker returns `needs-work` or `blocked`, `task_controller_gate_check` mu
 
 After a fix lane and review lane prove the issue is resolved, keep the original negative worker for audit but update it to `status: resolved` with notes naming the resolving lane/request. `resolved` means "the finding was valid, and later work fixed it"; it is different from `superseded`, which means "this worker was replaced, mistaken, duplicate, or only an audit placeholder."
 
-Before an independent review worker is registered, provide `reviewsWorkerIds` covering every current-revision `approved-target` writer in an earlier lane, including support/repair/migration writers, and assign a different `runtimeHandle`. Do not include writers from later lanes. A final review after all writers covers all of them. Writer callback and completion do not wait for future reviews; downstream review entry/completion and the final gate enforce coverage. A fresh prompt on a covered writer runtime is still self-review. In strict mode the review callback also checks every preserve, allowed-change, forbidden, and acceptance ID.
+Before independent review registration, provide `reviewsWorkerIds` covering its compiled `verificationSubjects` and assign a different `runtimeHandle`. Intermediate review consumes named input artifacts, not every earlier writer or future production. Final review covers final writers; legacy states retain earlier-writer scope. Writer completion does not wait for a future review; downstream review and final gates enforce coverage. A fresh prompt on the same runtime is still self-review. Strict semantic acceptance requirements remain in force.
 
 If the user changes contract scope or acceptance, call `task_controller_revise_contract` from the earliest affected lane. Affected lane artifacts and all old callbacks become invalid for progression; dispatch new current-revision workers rather than reusing old callback data.
 
@@ -526,6 +528,8 @@ Record every worker with:
 Use KY-TASK state tools when available:
 
 - `task_controller_register_worker`
+- `task_controller_claim_dispatch`
+- `task_controller_release_dispatch`
 - `task_controller_update_worker`
 - `task_controller_list_workers`
 - `task_controller_record_callback`

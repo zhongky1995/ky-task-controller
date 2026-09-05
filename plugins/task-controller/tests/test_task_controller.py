@@ -22,6 +22,18 @@ class ControllerTestCase(unittest.TestCase):
         self.state = Path(self.temp_dir.name) / "state.json"
 
     def command(self, command: str, *args: str, ok: bool = True) -> subprocess.CompletedProcess[str]:
+        # This suite predates orchestration contracts and tests runtime/semantic
+        # enforcement independently. Import those fixtures explicitly as legacy;
+        # strict default/provenance/admission have dedicated integration tests.
+        if command == "init" and "--orchestration-policy" not in args:
+            args = list(args)
+            if "--execution-policy" in args:
+                index = args.index("--execution-policy") + 1
+                policy = json.loads(args[index])
+                policy.setdefault("orchestrationPolicy", "legacy")
+                args[index] = json.dumps(policy)
+            else:
+                args.extend(["--orchestration-policy", "legacy"])
         result = subprocess.run(
             [sys.executable, str(HELPER), command, "--state", str(self.state), *args],
             cwd=ROOT,
@@ -59,6 +71,9 @@ class ControllerTestCase(unittest.TestCase):
         eligible = ["managed_agent_worker"] if eligible_runtimes is None else eligible_runtimes
         required = required_worker_lanes or []
         policy = {
+            # These fixtures intentionally exercise pre-orchestration workflow
+            # contracts. New strict planning is covered in test_orchestration.
+            "orchestrationPolicy": "legacy",
             "splitRequirement": split_requirement,
             "mode": mode,
             "eligibleRuntimes": eligible,
@@ -370,6 +385,37 @@ class ExecutionPolicyTests(ControllerTestCase):
         self.assertEqual("project-main", policy["targetProjectId"])
         self.assertEqual("controller_project", policy["projectResolutionSource"])
         self.assertEqual("native_thread_lane", state["lanes"][0]["recommendedRuntime"])
+
+    def test_parallel_worker_ceiling_can_be_raised_to_ten(self) -> None:
+        lanes = [
+            {"name": f"research-{index}", "workerRequired": True, "dependsOn": []}
+            for index in range(10)
+        ]
+        state = self.init_state(
+            lanes,
+            required_worker_lanes=[lane["name"] for lane in lanes],
+            max_parallel_workers=10,
+        )
+        self.assertEqual(10, state["executionPolicy"]["maxParallelWorkers"])
+        frontier = self.output(self.command("ready-lanes"))
+        self.assertEqual(10, len(frontier["readyLanes"]))
+        self.assertEqual([], frontier["deferredReadyLanes"])
+        self.assertTrue(frontier["waitCoordination"]["requiresBatching"])
+        self.assertEqual(8, frontier["waitCoordination"]["maxTargetsPerCall"])
+        self.assertEqual([8, 2], [len(batch) for batch in frontier["waitCoordination"]["laneBatches"]])
+
+    def test_parallel_worker_ceiling_rejects_eleven(self) -> None:
+        rejected = self.command(
+            "init",
+            "--goal",
+            "reject excessive concurrency",
+            "--lane-definitions",
+            json.dumps([{"name": "research", "dependsOn": []}]),
+            "--execution-policy",
+            json.dumps({"maxParallelWorkers": 11}),
+            ok=False,
+        )
+        self.assertIn("maxParallelWorkers must be an integer from 1 to 10", rejected.stderr)
 
     def test_strict_policy_blocks_native_dispatch_without_resolved_project(self) -> None:
         rejected = self.command(
@@ -1803,6 +1849,7 @@ class McpSchemaTests(unittest.TestCase):
             self.assertIn(field, insert_lane)
         self.assertEqual("native_session_required", policy["properties"]["runtimeSelectionPolicy"]["default"])
         self.assertEqual(4, policy["properties"]["maxParallelWorkers"]["default"])
+        self.assertEqual(10, policy["properties"]["maxParallelWorkers"]["maximum"])
         self.assertEqual(
             "inherit_or_resolve_required",
             policy["properties"]["projectAffinityPolicy"]["default"],
@@ -1906,6 +1953,7 @@ class McpSchemaTests(unittest.TestCase):
                                 {"name": "research", "kind": "evidence", "workerRequired": True, "dependsOn": []}
                             ],
                             "executionPolicy": {
+                                "orchestrationPolicy": "legacy",
                                 "splitRequirement": "mandatory",
                                 "mode": "distributed",
                                 "eligibleRuntimes": ["native_thread_lane"],

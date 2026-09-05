@@ -25,6 +25,13 @@ HANDOFF_RISKS = {"low", "medium", "high"}
 HANDOFF_MODES = {"", "same-lane", "artifact-contract", "independent"}
 VERIFY_SCOPES = {"final-artifact", "intermediate-artifact", "upstream-decision"}
 ORDER_ONLY_REASONS = {"order", "list-order", "keep-order", "sequential-by-default", "default-order"}
+ORCHESTRATION_FIELDS = (
+    "dependsOn", "purpose", "contributionRole", "semanticAuthority", "semanticOwner",
+    "dependencyReasons", "inputContracts", "outputContracts", "externalInputs",
+    "handoffRisk", "handoffMode", "handoffContract", "verificationScope",
+    "capabilityRequirements", "capabilityNeeds", "estimatedEffort", "writeTargets",
+    "continuityRequired",
+)
 
 
 def _canonical(value: Any) -> str:
@@ -65,6 +72,25 @@ def _field(definition: dict[str, Any], metadata: dict[str, Any], key: str, defau
     if key in metadata:
         return metadata[key]
     return default
+
+
+def declared_orchestration_fields(definition: dict[str, Any]) -> list[str]:
+    """Preserve input provenance across normalization; inferred defaults are not declarations."""
+    metadata = definition.get("metadata", {})
+    metadata = metadata if isinstance(metadata, dict) else {}
+    declared = (
+        set(_strings(definition["orchestrationDeclared"]))
+        if "orchestrationDeclared" in definition
+        else {key for key in ORCHESTRATION_FIELDS if key in definition or key in metadata}
+    )
+    # A caller cannot make an absent/blank required field explicit just by
+    # listing its name in provenance. Empty dependency arrays remain valid.
+    for key in ("purpose", "contributionRole", "semanticAuthority", "handoffRisk", "handoffMode"):
+        if not _text(_field(definition, metadata, key)):
+            declared.discard(key)
+    if not isinstance(_field(definition, metadata, "dependsOn"), list):
+        declared.discard("dependsOn")
+    return sorted(declared)
 
 
 def _semantic_text(name: str, kind: str, purpose: str) -> str:
@@ -146,13 +172,7 @@ def _normalize_lane(definition: dict[str, Any], previous: str | None, policy: st
         raise ValueError("OrchestrationPlan: every lane requires a non-empty name")
     kind = _text(_field(definition, metadata, "kind"), "support")
     purpose = _text(_field(definition, metadata, "purpose"), _text(definition.get("notes"), f"Complete {name}"))
-    declared = set(_strings(definition.get("orchestrationDeclared")))
-    declared.update(key for key in (
-        "dependsOn", "purpose", "contributionRole", "semanticAuthority", "semanticOwner",
-        "dependencyReasons", "inputContracts", "outputContracts", "externalInputs",
-        "handoffRisk", "handoffMode", "handoffContract", "verificationScope",
-        "capabilityRequirements", "capabilityNeeds", "estimatedEffort", "writeTargets",
-    ) if key in definition or key in metadata)
+    declared = set(declared_orchestration_fields(definition))
     dependency_declared = "dependsOn" in declared
     dependencies = _normalize_dependencies(_field(definition, metadata, "dependsOn", []))
     if not dependency_declared and previous:
@@ -249,6 +269,19 @@ def _runtime_available(capability: dict[str, Any], runtime: dict[str, Any] | Non
     return True, ""
 
 
+def _availability_status(capability: dict[str, Any], runtime: dict[str, Any] | None) -> str:
+    """Unknown host availability is not evidence that a capability can run."""
+    runtime = runtime or {}
+    available, _ = _runtime_available(capability, runtime)
+    if not available:
+        return "unavailable"
+    dependencies = capability.get("dependencies", {})
+    providers = dependencies.get("runtimes", []) if isinstance(dependencies, dict) else []
+    if runtime.get(capability["id"]) is True or (providers and all(runtime.get(item) is True for item in providers)):
+        return "confirmed"
+    return "unverified"
+
+
 def _capability_catalog(
     active_ids: Iterable[str] | None,
     available_capabilities: Any,
@@ -308,23 +341,24 @@ def _capability_score(lane: dict[str, Any], capability: dict[str, Any]) -> tuple
     score = 0
     reasons: list[str] = []
     lane_tokens = _tokens([
-        lane["name"], lane["kind"], lane["purpose"], lane["inputContracts"],
-        lane["outputContracts"], lane["capabilityNeeds"],
+        lane["capabilityNeeds"] or lane["purpose"], lane["inputContracts"], lane["outputContracts"],
     ])
     cap_type = _text(capability.get("capabilityType"), "workflow")
+    for field, weight in (("domains", 30), ("triggers", 18), ("inputs", 20), ("outputs", 20)):
+        overlap = lane_tokens & _tokens(capability.get(field, []))
+        if overlap:
+            score += weight * len(overlap)
+            reasons.append(f"{field}: {', '.join(sorted(overlap))}")
+    if not reasons:
+        return 0, []
+    # Role and catalog priority may rank relevant candidates, never create a
+    # match on their own (notably for unknown-domain verifier requests).
     if lane["semanticAuthority"] == "verify":
         if cap_type == "verifier":
             score += 60
             reasons.append("verifier role fit")
         else:
             score -= 30
-    elif cap_type != "verifier":
-        score += 10
-    for field, weight in (("domains", 30), ("triggers", 18), ("inputs", 20), ("outputs", 20)):
-        overlap = lane_tokens & _tokens(capability.get(field, []))
-        if overlap:
-            score += weight * len(overlap)
-            reasons.append(f"{field}: {', '.join(sorted(overlap))}")
     priority = capability.get("routing", {}).get("priority", 0) if isinstance(capability.get("routing"), dict) else 0
     if isinstance(priority, int):
         score += min(max(priority, 0), 100) // 20
@@ -354,7 +388,11 @@ def route_lane_capabilities(
             if capability.get("status", "active") != "active" or not available:
                 missing.append({"id": requirement, "reason": reason or f"capability status is {capability.get('status')}"})
                 continue
-            selected.append({"id": requirement, "reason": "exact lane capability requirement"})
+            selected.append({
+                "id": requirement,
+                "reason": "exact lane capability requirement",
+                "availability": _availability_status(capability, runtime_availability),
+            })
         if not lane["capabilityRequirements"] and lane["capabilityNeeds"]:
             candidates: list[tuple[int, str, list[str]]] = []
             for capability_id, capability in catalog.items():
@@ -377,6 +415,7 @@ def route_lane_capabilities(
             "suggestions": suggestions,
             "missing": missing,
             "status": status,
+            "runtimeReady": status == "bound" and all(item["availability"] == "confirmed" for item in selected),
         })
     return routes
 
@@ -516,9 +555,21 @@ def compile_orchestration_plan(
     for lane in lanes:
         if lane["semanticAuthority"] != "verify" or lane["verificationScope"] == "upstream-decision":
             continue
-        for writer in final_writers:
-            if writer["name"] != lane["name"] and writer["name"] not in ancestors.get(lane["name"], set()):
-                blockers.append({"code": "premature_verification", "lane": lane["name"], "writer": writer["name"], "reason": "verification must consume the artifact it judges"})
+        if lane["verificationScope"] == "intermediate-artifact":
+            subjects: set[str] = set()
+            for contract in lane["inputContracts"]:
+                upstream = set(output_producers.get(contract, [])) & ancestors.get(lane["name"], set())
+                # For a versioned contract, judge the latest consumed version,
+                # not a future producer of the same contract ID.
+                subjects.update(name for name in upstream if not any(name in ancestors.get(other, set()) for other in upstream))
+            if not subjects:
+                blockers.append({"code": "verification_subject_required", "lane": lane["name"], "reason": "intermediate review must name a produced input artifact"})
+        else:
+            subjects = {writer["name"] for writer in final_writers if writer["name"] != lane["name"]}
+        lane["verificationSubjects"] = [name for name in names if name in subjects]
+        for subject in lane["verificationSubjects"]:
+            if subject not in ancestors.get(lane["name"], set()):
+                blockers.append({"code": "premature_verification", "lane": lane["name"], "writer": subject, "reason": "verification must consume the artifact it judges"})
 
     capability_routes = route_lane_capabilities(
         lanes,
@@ -530,9 +581,9 @@ def compile_orchestration_plan(
         if route["missing"]:
             item = {"code": "capability_unavailable", "lane": route["lane"], "missing": route["missing"]}
             (blockers if policy == "strict" else warnings).append(item)
-        elif route["status"] == "unbound" and by_name[route["lane"]]["workerRequired"] and complex_plan:
+        elif route["status"] in {"unbound", "suggested"} and by_name[route["lane"]]["workerRequired"]:
             item = {"code": "capability_unbound", "lane": route["lane"]}
-            (blockers if policy == "strict" and not trusted else warnings).append(item)
+            (blockers if policy == "strict" else warnings).append(item)
 
     primary_effort = sum(lane["estimatedEffort"] for lane in lanes if lane["contributionRole"] == "primary")
     supporting_effort = sum(lane["estimatedEffort"] for lane in lanes if lane["contributionRole"] == "supporting")
@@ -565,6 +616,7 @@ def compile_orchestration_plan(
         "capabilityRoutes": capability_routes,
         "runtimeSelectionStage": "after-orchestration",
         "orchestrationExecutable": not blockers,
+        "runtimeReady": not blockers and all(route["runtimeReady"] for route in capability_routes if by_name[route["lane"]]["workerRequired"]),
         "blockers": sorted(blockers, key=_canonical),
         "warnings": sorted(warnings, key=_canonical),
         "orchestrationDigest": "",

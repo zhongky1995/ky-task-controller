@@ -38,7 +38,8 @@ Parallelism is dependency-driven:
 - `dependsOn: []` means the lane is immediately eligible to run beside other ready lanes.
 - Lanes that share a write target must be serialized by dependencies; independent read/research/design lanes should not be serialized merely by list order.
 - Missing `dependsOn` is accepted only for legacy states and preserves the historical ordered-lane chain.
-- Dispatch the full ready frontier, up to `maxParallelWorkers` (distribution default: 4), before waiting for any worker.
+- Total Lane count is not capped. Dispatch the full ready frontier, up to `maxParallelWorkers` (distribution default: 4; explicit task maximum: 10), before waiting for any worker.
+- If nine or ten Sessions are active, keep them all active and coordinate waits in stable batches of at most eight targets per host wait call.
 
 Orchestration is a first-class control stage, not a side effect of lane order:
 
@@ -48,6 +49,7 @@ Orchestration is a first-class control stage, not a side effect of lane order:
 - Classify lanes as `primary`, `prerequisite`, `supporting`, or `verification`. Supporting work must feed the primary path; verification must consume the decision, sample, or artifact it judges.
 - Use `inputContracts` and `outputContracts` to derive dependencies. List position is never a valid dependency reason.
 - Match capabilities from each lane's actual job, inputs, outputs, write boundary, and acceptance role. Do not copy a globally matched domain skill onto every lane.
+- Suggestions are planning drafts, not bindings. Unknown host availability requires explicit discovery evidence before dispatch admission.
 - Assess handoff loss before splitting design from production. High-loss work stays in one `define-and-implement` lane unless a concrete artifact handoff contract preserves the judgment.
 - Runtime selection happens only after orchestration passes. A clean Session executes the graph; it does not make a wrong graph correct.
 
@@ -159,6 +161,7 @@ Read `references/lane-contracts.md` when generating lane prompts or checkpoints.
 Read `references/work-orchestration.md` for every new composite lane map, generic no-pack task, dependency correction, or failure involving wrong parallel/serial order.
 Read `references/session-orchestration.md` when the task needs distributed execution, worker prompts, thread dispatch, or worker result merge.
 Read `references/codex-thread-adapter.md` when checking, creating, messaging, or recovering Codex Desktop worker threads.
+Read `references/dispatch-and-recovery.md` before creating/replacing a worker, handling a creation timeout, or continuing after correction.
 Read `references/business-delivery-presets.md` for client page decks, evidence-led analysis, Feishu Base/dashboard/Wiki delivery, or revision of an existing document.
 
 ## Controller Workflow
@@ -187,9 +190,9 @@ Read `references/business-delivery-presets.md` for client page decks, evidence-l
    - forbidden actions
    - pass gate
    - `dependsOn`
-7. Call `task_controller_ready_lanes` and dispatch every returned lane, bounded by `maxParallelWorkers`.
-8. Create all Session workers with `target.type: project` and the locked `projectId` before waiting for any one of them.
-9. Verify each created thread reports the same `projectId`, then register it with `projectId` and `projectEnvironment`.
+7. Call `task_controller_ready_lanes`; atomically claim each selected lane with `task_controller_claim_dispatch` before host creation.
+8. For each `creationAction: create`, create the Session with `target.type: project` and the locked `projectId`. Reconcile repeated/uncertain claims without creating again.
+9. Verify project affinity, then register the actual thread with its `claimId`, `requestId`, `projectId`, and `projectEnvironment`. Admit the whole available frontier before waiting.
 10. Wait on the batch together; record callbacks and lane checkpoints as workers finish.
 11. Refill freed capacity from the newly ready frontier.
 12. Final review checks project affinity, source lineage, user path, write boundary, stale-version contamination, and acceptance cases.
@@ -239,18 +242,18 @@ Use `scripts/task_controller_state.py` when useful to keep lane status outside c
 Typical commands:
 
 ```bash
-python3 scripts/task_controller_state.py init --state /tmp/controller.json --goal "Build clean v3 dashboard" \
-  --lane-definitions '[{"name":"implementation","kind":"implementation","workerRequired":true,"workerLifecycle":"ephemeral","contextPolicy":"packet_only","dependsOn":[]},{"name":"review","kind":"review","workerRequired":true,"workerLifecycle":"ephemeral","contextPolicy":"packet_only","dependsOn":["implementation"]}]' \
-  --execution-policy '{"splitRequirement":"mandatory","mode":"distributed","eligibleRuntimes":["native_thread_lane"],"requiredWorkerLanes":["implementation","review"],"independentReviewRequired":true,"runtimeSelectionPolicy":"native_session_required","nativeThreadUserApproved":true,"maxParallelWorkers":4,"projectAffinityPolicy":"inherit_or_resolve_required","projectlessUserApproved":false,"targetProjectId":"<id-from-list_projects>","targetProjectPath":"<saved-project-path>","projectResolutionSource":"controller_project"}'
+python3 scripts/task_controller_state.py plan-orchestration --lane-definitions @lane-definitions.json
+python3 scripts/task_controller_state.py init --state /tmp/controller.json --goal "Approved task goal" \
+  --lane-definitions @lane-definitions.json --execution-policy @execution-policy.json \
+  --task-blueprint @task-blueprint.json
 python3 scripts/task_controller_state.py status --state /tmp/controller.json
 python3 scripts/task_controller_state.py ready-lanes --state /tmp/controller.json
-python3 scripts/task_controller_state.py complete-lane --state /tmp/controller.json --lane evidence --artifact source-ledger.md --decision pass
 python3 scripts/task_controller_state.py next-lane --state /tmp/controller.json
 ```
 
 `task_controller_init` accepts `contract`, either `lanes` or explicit `laneDefinitions`, and `executionPolicy`. Lane definitions can lock `workerLifecycle`, `contextPolicy`, `runtimePreference`, and `dependsOn`. The policy locks `splitRequirement`, `mode`, `eligibleRuntimes`, `downgradeReason`, `requiredWorkerLanes`, `independentReviewRequired`, `runtimeSelectionPolicy`, `nativeThreadUserApproved`, `maxParallelWorkers`, `projectAffinityPolicy`, `projectlessUserApproved`, `targetProjectId`, `targetProjectPath`, and `projectResolutionSource`. Mandatory work with an eligible real runtime cannot initialize as `direct` or `sequential_lanes`; a no-runtime fallback requires an explicit downgrade reason. Under the Session-first policy, distributed native initialization also fails until a saved project is resolved.
 
-For any new composite lane map, use `plan-orchestration` first. It returns explicit parallel waves, justified serial edges, join points, semantic ownership, handoff blockers, and lane-level capability routes without dispatching workers. Strict initialization rejects an explicitly orchestrated plan with unresolved blockers. Legacy schema-v2 callers remain readable and are marked as legacy-order when they did not declare the new contract.
+Prepare the JSON files above from the actual approved contract, not a fixed role template. For any new composite lane map, use `plan-orchestration` first. It returns parallel waves, justified serial edges, join points, semantic ownership, handoff blockers, and lane-level capability routes without dispatching workers. New initialization defaults to strict even when fields are missing; it never silently opts into legacy. Missing or blank declarations must be supplied. Existing states remain readable; a deliberate old-contract import must explicitly set `orchestrationPolicy: legacy`.
 
 For a new `TaskBlueprint`, use `plan-blueprint` to read-only compile the routing decision, formal `SolutionGraph`, `OrchestrationPlan`, projected lanes, and `WorkerPackets`. It never dispatches workers. `init --task-blueprint --auto-plan` persists that plan and uses its lane projection when no `laneDefinitions` are supplied. A graph-backed worker registration and callback must include the current packet ID and digest; workers are not dispatched automatically by planning or initialization.
 
@@ -276,7 +279,7 @@ Use `route-capabilities --task-blueprint --active-capability-ids ...` or the cor
 
 New auto-planned `TaskBlueprint` / `SolutionGraph` state uses the `structured-v1` hard gate. For an `approved-target` lane, the sequence is fixed:
 
-1. Register the active current-revision worker with its `WorkerPacket` identity.
+1. Claim dispatch, create the host worker, and register it with its `claimId` and current `WorkerPacket` identity.
 2. Issue an `OperationPermit` with `task_controller_issue_operation_permit` for the packet-allowlisted capability, target, action, payload, and readback plan.
 3. Dispatch that permit with `task_controller_dispatch_operation`; only the restricted dispatcher can create the ledger `OperationReceipt`.
 4. If dispatch was interrupted after its claim was persisted, use `task_controller_reconcile_operation`; this performs readback only and never repeats the write.
@@ -324,6 +327,8 @@ Installed MCP tools can also record worker/session state:
 - `task_controller_status`
 - `task_controller_next_lane`
 - `task_controller_ready_lanes`
+- `task_controller_claim_dispatch`
+- `task_controller_release_dispatch`
 - `task_controller_complete_lane`
 - `task_controller_insert_lane`
 - `task_controller_register_worker`
@@ -351,8 +356,8 @@ When distributed execution is approved, run:
 1. Produce `role_map`.
 2. Call `list_projects`, resolve one saved project, and lock it in `executionPolicy.targetProjectId`.
 3. Initialize KY-TASK state with `task_controller_init`.
-4. Call `task_controller_ready_lanes`; create every returned `native_thread_lane` with a project target before waiting.
-5. Verify project affinity and register each lane with `task_controller_register_worker`.
+4. Call `task_controller_ready_lanes`; claim each lane before creating its `native_thread_lane`. Only `creationAction: create` permits a new Session; otherwise reconcile the existing request.
+5. Verify project affinity and register each lane with its `claimId` and `requestId` using `task_controller_register_worker`.
 6. Require every native worker to callback to `KY-TASK00`.
 7. Record native active messaging as `active_message`, native polling recovery as `controller_poll_recovery`, and managed result collection as `managed_result_collected`.
 8. Record callbacks with `task_controller_record_callback`.
@@ -368,6 +373,7 @@ Worker registration is incomplete unless it includes:
 - both an explicit `threadId` and `runtimeHandle` for `native_thread_lane`; both values must be the same Codex thread id so recovery and worker location use one identity.
 - `projectTargetType`, `projectId`, and `projectEnvironment` for every native worker. Under strict project affinity, target type is `project`, `projectId` must equal `executionPolicy.targetProjectId`, and environment is `local` or `worktree`.
 - non-empty `requestId`.
+- the pre-creation `claimId` for independent workers in new strict states.
 - `controllerThreadId` and `replyToThreadId`: native `active_message_required` workers must use the real user-facing controller thread id. Managed workers may leave them empty or use a stable logical controller identifier such as `KY-TASK00`; a logical identifier must not be represented as a native thread id.
 - `callbackExpected: true`.
 - `callbackModeExpected`: `active_message_required` under the native Session policy; `managed_result_collected` only under an explicit managed-worker override.
@@ -397,9 +403,9 @@ Callback mode rules:
 
 In `semantic_strict`, completion uses the same semantic callback guard as `record-callback`; manually setting lane or worker status cannot substitute for a manifest and complete passing evidence.
 
-Each review worker must name every current-revision `approved-target` writer in an earlier lane in `reviewsWorkerIds`, regardless of lane kind, and use a different `runtimeHandle`. Writers in later lanes are outside that review's responsibility. A final review placed after all writers therefore covers every current writer. Writer callback and completion do not require a future review to be registered; coverage is enforced when entering or completing each downstream review and at the final gate. Strict review callbacks must still cover every `preserve`, `allowedChanges`, `forbidden`, and `acceptance` ID. A review performed by the same thread or managed-agent identity as a covered writer is self-review and must be rejected.
+Each review worker names the current workers in its compiled `verificationSubjects` through `reviewsWorkerIds`, using a different `runtimeHandle`. An `intermediate-artifact` review derives subjects from the producers of its `inputContracts`; independent branches and future production are not subjects. Final review covers all final writers. Historical legacy states retain their earlier-writer scope. Coverage is enforced when entering/completing review and at finalization. Strict semantic callbacks still require their configured acceptance evidence; changing scope does not waive independent review or write authorization.
 
-When the user changes scope, acceptance, sources, or another locked contract term, call `task_controller_revise_contract` with the earliest `invalidFromLane`. It increments `contractRevision`, preserves upstream lanes, invalidates downstream outputs, and supersedes old workers/callbacks. Do not reuse an old artifact or callback; dispatch new current-revision workers and rerun the affected gates.
+When the user changes a locked contract term, call `task_controller_revise_contract` with the earliest `invalidFromLane`. It increments the revision and invalidates affected outputs/callbacks. Current invalidation is still an ordered suffix, not dependency-local graph migration. The resulting `stale` lanes re-enter the ready frontier once dependencies pass and old execution is reconciled. A still-running superseded worker retains capacity until host stop evidence is recorded. Follow `dispatch-and-recovery.md`; do not reuse stale evidence or blindly retry `needs-work` / `blocked` work.
 
 ## Tool Profile And Credential Policy
 
@@ -440,7 +446,7 @@ Sandbox/credential issue wording:
 - A worker thread can be valid while one specific command is blocked by Keychain or missing Feishu scope.
 - The controller should update state with the worker's fallback or blocker; it should not take over the external write in the controller thread.
 
-For a task like a Feishu/Base management demo, project operating cockpit, dashboard prototype, or artifact with business path plus information path, the default lane plan is:
+For a task like a Feishu/Base management demo or dashboard, these are possible responsibilities, not a default lane plan:
 
 1. Evidence worker.
 2. Object/model worker.
@@ -448,7 +454,7 @@ For a task like a Feishu/Base management demo, project operating cockpit, dashbo
 4. Implementation writer, as the only final-artifact writer.
 5. Review worker.
 
-The implementation writer may start only after upstream callbacks are recorded and the gate passes.
+Keep only responsibilities needed by the actual deliverable; combine cohesive design/production and parallelize independent prerequisites. There is no required five-lane team. The writer starts only after its actual dependencies and gates pass.
 
 Do not try to make the local MCP server create Codex Desktop threads directly. Thread and project discovery/creation belong to the Codex app runtime, while KY-TASK owns the controller protocol and state. Never call `create_thread` with `target.type: projectless` under the installed policy.
 

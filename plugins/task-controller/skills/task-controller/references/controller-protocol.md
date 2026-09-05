@@ -53,7 +53,8 @@ Runtime selection:
 - Under the default `native_session_required` policy, use `native_thread_lane` for every distributed lane.
 - Under `projectAffinityPolicy: inherit_or_resolve_required`, resolve and lock one saved Codex `targetProjectId` before native dispatch; every worker must report that project id.
 - `ephemeral` lanes keep `contextPolicy: packet_only`; `persistent` lanes use `contextPolicy: checkpoint_delta`.
-- Declare `dependsOn` for every new lane and dispatch the full ready frontier up to `maxParallelWorkers`.
+- Declare `dependsOn` for every new lane. Total Lane count is uncapped; dispatch the full ready frontier up to `maxParallelWorkers` (default four, explicit task maximum ten).
+- When more than eight Sessions are active, coordinate them through stable wait batches of at most eight targets per host wait call.
 - Both are real independent workers. `single_thread_section` and `thread_create_unavailable` are fallback records, not worker equivalents.
 - If `splitRequirement` is `mandatory` and either real runtime is eligible, `mode` must be `distributed`. `multi_session` remains a legacy alias.
 
@@ -74,7 +75,7 @@ The schema-v2 outer version does not change for semantic enforcement. New top-le
 
 Contract spec 2.x locks `interactionMode`, the business delivery shape, canonical-source priority, binding decisions, optional intent anchors, sample/user approval gates, and exact write policy. `discuss_only` and `plan_only` cannot authorize approved-target work. Canonical JSON SHA256 produces the deliverable fingerprint and a revision-bound contract digest.
 
-Strict pass evidence is structured: non-empty `artifactManifest`, known unique `checkResults`, non-empty evidence, required-source coverage, and all applicable checks passing. Review additionally covers every preserve/allowed/forbidden/acceptance item and every current approved-target writer in an earlier lane, regardless of writer lane kind. Later writers do not retroactively expand an earlier review; the final gate still requires every writer to have downstream review coverage.
+Strict pass evidence is structured: non-empty `artifactManifest`, known unique `checkResults`, non-empty evidence, required-source coverage, and all applicable checks passing. Review additionally covers its configured semantic checks and the current workers in compiled `verificationSubjects`. Intermediate subjects come from produced `inputContracts`; final review covers final writers. Earlier-writer scope is retained only for legacy states. The final gate still requires every approved-target writer to have downstream review coverage.
 
 `complete-lane --decision pass` is not a manual status flip. It requires a non-empty artifact, passing upstream lanes, and any required current-revision real worker plus accepted callback. Independent review additionally requires `reviewsWorkerIds` coverage and a reviewer `runtimeHandle` different from every implementation identity it reviews.
 
@@ -82,7 +83,9 @@ If the user changes the locked scope or acceptance criteria, call `revise-contra
 
 Correction keywords are change-control input, not prose to absorb silently. Record them as `correctionEvents`; a callback containing events cannot pass, and open events block registration, gate, and completion. Revision must consume all open events and may not start later than the earliest recommended invalid lane. Strict revision includes the complete replacement `contractSpec`.
 
-State writes use an advisory lock around the complete mutation and atomically replace the JSON file after fsync. `next-lane` reports `finalizable` after all lanes pass; only `finalize` runs the final gate and records `finalized` for the current revision.
+State writes use an advisory lock around the complete mutation and atomically replace the JSON file after fsync. `ready-lanes`, `next-lane`, and `finalize` share one finalization check: all lanes must pass, with no live attempts or unbound claims. Only `finalize` records the finalized revision. Revision-created `stale` work is schedulable again; `blocked` and `needs-work` require explicit resolution.
+
+New strict states use `dispatchAdmission: claims-v1`. Reserve through `claim-dispatch` before host creation, then bind `claimId` at registration. Capacity includes live attempts and unbound reservations; one lane has one current attempt. Superseding a running worker retains capacity until `runtimeStopEvidence` confirms it stopped. Read `dispatch-and-recovery.md` for repeated requests, uncertain creation, and explicit release. New initialization never selects legacy because fields were omitted; compatibility imports must request it explicitly.
 
 ## TaskBlueprint and Shadow Routing
 
@@ -106,7 +109,7 @@ For graph-backed state, `register-worker` requires `packetId` and `packetDigest`
 
 New auto-planned `TaskBlueprint` / `SolutionGraph` state uses `structured-v1` as a hard protocol gate. Manual legacy states remain compatible with their documented callback contract. The mandatory order for an `approved-target` operation is:
 
-1. Register a current-revision worker with its current `WorkerPacket` identity.
+1. Claim dispatch, create the host worker, and register it with its `claimId` and current `WorkerPacket` identity.
 2. Use `task_controller_issue_operation_permit` to create an `OperationPermit` for the packet-allowlisted capability, target, action, payload, approval references, and readback plan.
 3. Use `task_controller_dispatch_operation` to consume that permit. The restricted dispatcher creates the `OperationReceipt` and readback evidence.
 4. If a persisted claim was interrupted, use `task_controller_reconcile_operation`. It performs the approved readback only and never repeats the write.
