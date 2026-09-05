@@ -6,18 +6,26 @@ Compatibility baseline: current `schemaVersion: 2`
 
 ## 0. Current State Versus Target State
 
-This document is a target architecture and migration contract. It does not claim that the current implementation already provides blueprint compilation, capability routing, dispatcher-enforced external writes, or reproducible business verification.
+This document distinguishes shipped mechanisms from target architecture. Blueprint/graph compilation, capability routing, permit dispatch, structured verification, and dispatch admission are implemented within the boundaries below; these do not imply automatic semantic planning, universal provider interception, or proven real-task success rates.
 
 | Area | Current implementation | Target architecture |
 |---|---|---|
-| task definition | human-readable Planner output plus manually created `contractSpec` | validated `TaskBlueprint` compiled from one diagnosis |
+| task definition | `TaskBlueprint` compiler and manual legacy `contractSpec` input | one diagnosis with richer source/intent validation |
 | decomposition and orchestration | `SolutionGraph` plus `OrchestrationPlan` with semantic ownership, waves, justified serial edges, join points, handoff checks, and legacy lane projection | versioned dependency DAG with richer cost/lease optimization |
-| worker assignment | free-text task and prompt with contract hashes | immutable `WorkerPacket` compiled from the graph |
-| write governance | callback receipt validation and operating discipline | controller-issued `OperationPermit` and dispatcher-only W3/W4 execution |
-| verification | worker/reviewer check IDs with free-text evidence | artifact-bound, reproducible `VerificationResult` objects |
-| routing | scenario-level registry routing plus lane-level exact/suggested capability routes | broader dynamic catalog with equivalent-capability proofs |
+| worker assignment | graph-backed immutable `WorkerPacket`; manual lanes retain task/prompt | equivalent packet coverage for generic graphs |
+| dispatch admission | locked pre-creation claims, duplicate/capacity gates, explicit reconciliation; host tools create Sessions | broader host lifecycle automation and observability |
+| write governance | permit/receipt dispatcher with typed Lark operations; no interception of bypasses | broader provider coverage without weakening boundaries |
+| verification | artifact-bound structural results and external semantic/business attestations; intermediate reviews bind produced input subjects | reproducible task-level quality evaluations |
+| routing | per-lane exact bindings; suggested/unbound workers fail strict execution; runtime evidence separate from binding | broader dynamic catalog with equivalent-capability proofs |
 
 Until the relevant migration step ships, current limitations remain explicit and must not be presented as implemented guarantees.
+
+The 0.7 admission/recovery slice keeps planning in `control_plane/orchestration.py`,
+capacity and claims in `runtime/dispatch_admission.py`, and locked I/O, callbacks,
+shared readiness/finalization, and compatibility in `scripts/task_controller_state.py`.
+`DispatchClaim` moves reserved → bound or explicitly released; ambiguous creation
+and still-running retired attempts continue to occupy capacity. MCP only forwards
+these contracts. Protocol details live in the skill's `dispatch-and-recovery.md`.
 
 ## 1. Product Goal
 
@@ -323,8 +331,12 @@ architecture:
 - `dependsOn` projects the SolutionGraph DAG into controller lane state.
 - `task_controller_ready_lanes` returns the concurrency frontier rather than a
   single next lane.
-- `maxParallelWorkers` bounds simultaneous Session workers; the distribution
-  default is four.
+- The task graph has no total Lane-count cap. `maxParallelWorkers` bounds only
+  simultaneous Session workers; the distribution default is four and an
+  explicit task may raise it to ten.
+- Host wait calls coordinate at most eight targets at a time. With nine or ten
+  active Sessions, the controller rotates stable wait batches without reducing
+  the active worker frontier.
 - `projectAffinityPolicy: inherit_or_resolve_required` requires a saved Codex
   project to be resolved and locked before native dispatch.
 - Native worker registration records `projectId` and `projectEnvironment` and

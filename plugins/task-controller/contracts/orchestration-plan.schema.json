@@ -59,6 +59,7 @@
     "capabilityRoutes": {"type": "array", "items": {"type": "object"}},
     "runtimeSelectionStage": {"const": "after-orchestration"},
     "orchestrationExecutable": {"type": "boolean"},
+    "runtimeReady": {"type": "boolean"},
     "blockers": {"type": "array", "items": {"type": "object"}},
     "warnings": {"type": "array", "items": {"type": "object"}},
     "orchestrationDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
@@ -90,6 +91,7 @@
         "handoffRisk": {"enum": ["low", "medium", "high"]},
         "handoffMode": {"enum": ["", "same-lane", "artifact-contract", "independent"]},
         "verificationScope": {"enum": ["final-artifact", "intermediate-artifact", "upstream-decision"]},
+        "verificationSubjects": {"type": "array", "items": {"type": "string"}},
         "capabilityRequirements": {"type": "array", "items": {"type": "string"}},
         "estimatedEffort": {"type": "number", "exclusiveMinimum": 0}
       }

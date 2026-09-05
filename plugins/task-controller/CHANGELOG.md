@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.7.0 — 2026-09-05
+
+- Unified ready/next/finalization checks; revision-invalidated lanes are dispatchable again, while failed/blocked lanes require explicit recovery.
+- Scoped intermediate verification to produced input artifacts, including versioned inputs; final review retains complete final-writer coverage.
+- Blocked strict execution of suggested/unbound worker capabilities; role/priority-only recommendations are no longer emitted. Distinguished exact binding from confirmed host availability.
+- Preserved declaration provenance across plan/init/insert. New initialization defaults to strict; legacy imports must opt in explicitly.
+- Added locked `claim-dispatch` / `release-dispatch` APIs and MCP tools. New strict workers claim capacity before host creation; registration enforces one attempt per lane and capacity for legacy callers too.
+- Kept uncertain creation claims reserved across revisions and retained capacity for still-running superseded workers until host stop evidence is recorded.
+- Preserved the four-worker default and ten-worker ceiling. Clarified that wait batching is a coordination plan, not an automatic host loop.
+- Removed managed-first and fixed-five-lane instruction conflicts; added generic recovery, sample-to-production, registration, and concurrent-claim regression workflows using synthetic identities, not live Sessions.
+
+## 0.6.1+codex.20260827
+
+- Clarified that total Lane count is not capped by worker concurrency.
+- Preserved the conservative default of four simultaneous Session workers while raising the explicit per-task ceiling from eight to ten.
+- Added host wait batching guidance for nine or ten active Sessions because one Codex wait call coordinates at most eight targets.
+- Added structured `waitCoordination` grouping guidance (eight plus two for ten workers); host waits and cursor rotation remain the controller's responsibility.
+
 ## 0.6.0+codex.20260827
 
 - Added first-class `OrchestrationPlan 1.0` between task decomposition and worker runtime selection.

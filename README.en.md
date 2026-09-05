@@ -13,7 +13,9 @@ KY-TASK addresses those failure modes with:
 - explicit goals, boundaries, deliverables, and acceptance gates;
 - first-class work orchestration that separates decomposition, parallel/serial planning, per-lane capability matching, and runtime selection;
 - visible native Codex Sessions for distributed work instead of silent Sub Agent fallback;
-- dependency-aware concurrency, capped at four workers by default;
+- dependency-aware concurrency with no total lane cap, four workers by default, and an explicit per-task ceiling of ten;
+- atomic pre-creation dispatch claims, admission checks at registration, one current attempt per lane, and reconciliation of uncertain creation or still-running superseded workers;
+- artifact-scoped sample/module review and explicit capability bindings, with host-discovery evidence required for unknown runtime availability;
 - required saved-project affinity for every worker Session;
 - exclusive durable write boundaries;
 - structured callbacks and separate implementation/review lanes;
@@ -28,6 +30,16 @@ KY-TASK addresses those failure modes with:
 The open-source distribution contains no standing user approval, account credentials, local project paths, or conversation history.
 
 Distributed work defaults to `native_session_required` and `inherit_or_resolve_required`. KY-TASK may record `nativeThreadUserApproved: true` only after the user explicitly approves distributed execution for the task. If approval, project resolution, or native Session tools are unavailable, execution blocks instead of silently falling back to managed Sub Agents or projectless Sessions.
+
+New plans default to strict orchestration even if fields are missing. Legacy
+state reads remain compatible; importing an old contract requires an explicit
+`legacy` policy. Revision-invalidated lanes re-enter the ready frontier, while
+failed/blocked work requires deliberate recovery rather than blind retries.
+
+Current boundaries: wait batches are a coordination plan, not a host wait loop;
+generic manual lanes do not yet receive the scenario graph's automatic
+WorkerPackets; revisions still invalidate an ordered suffix. The plugin neither
+creates host tasks itself nor intercepts external tools called outside its protocol.
 
 ## Install on macOS
 

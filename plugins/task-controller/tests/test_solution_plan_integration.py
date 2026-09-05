@@ -119,11 +119,13 @@ class SolutionPlanIntegrationTests(unittest.TestCase):
             "--execution-policy", json.dumps({"splitRequirement": "recommended", "mode": "multi_session", "eligibleRuntimes": ["managed_agent_worker"], "runtimeSelectionPolicy": "lane_lifecycle"}),
         )
         packet = state["workerPackets"]["strategy"]
+        claim = self.output(self.command("claim-dispatch", "--state", str(self.state), "--lane", "strategy", "--request-id", "request-1", "--capability-evidence", json.dumps({item: "synthetic host capability available" for item in state["lanes"][0]["capabilityBindings"]})))
         worker = self.output(self.command(
             "register-worker", "--state", str(self.state), "--worker-id", "strategy-worker", "--lane", "strategy",
             "--lane-runtime", "managed_agent_worker", "--request-id", "request-1", "--runtime-handle", "agent-1",
             "--thread-tool-check", "checked", "--packet-id", packet["packetId"], "--packet-digest", packet["packetDigest"],
             "--contract-digest", state["contractDigest"], "--deliverable-fingerprint", state["contractSpec"]["deliverableFingerprint"],
+            "--claim-id", claim["claimId"],
         ))
         self.assertEqual(packet["packetId"], worker["packetId"])
         self.assertTrue(worker["prompt"])
@@ -177,7 +179,8 @@ class SolutionPlanIntegrationTests(unittest.TestCase):
                 self.assertEqual([], persisted["workers"])
                 self.state.write_text(original_state, encoding="utf-8")
 
-        worker = self.output(self.command(*base, "--worker-id", "valid-worker"))
+        claim = self.output(self.command("claim-dispatch", "--state", str(self.state), "--lane", "strategy", "--request-id", "request", "--capability-evidence", json.dumps({item: "synthetic host capability available" for item in state["lanes"][0]["capabilityBindings"]})))
+        worker = self.output(self.command(*base, "--worker-id", "valid-worker", "--claim-id", claim["claimId"]))
         self.assertEqual(packet, json.loads(worker["task"]))
         self.assertTrue(worker["prompt"])
 
@@ -199,9 +202,14 @@ class SolutionPlanIntegrationTests(unittest.TestCase):
             "executionPolicy": {"splitRequirement": "recommended", "mode": "multi_session", "eligibleRuntimes": ["managed_agent_worker"], "runtimeSelectionPolicy": "lane_lifecycle"},
         })
         mcp_packet = mcp_state["workerPackets"]["strategy"]
+        mcp_claim = self.mcp_call("task_controller_claim_dispatch", {
+            "statePath": mcp_state_path, "lane": "strategy", "requestId": "mcp-request",
+            "capabilityEvidence": {item: "synthetic host capability available" for item in mcp_state["lanes"][0]["capabilityBindings"]},
+        })
         mcp_worker = self.mcp_call("task_controller_register_worker", {
             "statePath": mcp_state_path, "workerId": "mcp-worker", "lane": "strategy",
             "laneRuntime": "managed_agent_worker", "requestId": "mcp-request", "runtimeHandle": "mcp-agent", "threadToolCheck": "checked",
+            "claimId": mcp_claim["claimId"],
             "packetId": mcp_packet["packetId"], "packetDigest": mcp_packet["packetDigest"],
             "contractDigest": mcp_state["contractDigest"], "deliverableFingerprint": mcp_state["contractSpec"]["deliverableFingerprint"],
         })
