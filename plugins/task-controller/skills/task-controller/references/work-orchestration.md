@@ -25,6 +25,14 @@ task decomposition
 A visible Session cannot repair a bad graph. It only executes that graph with a
 cleaner context.
 
+Before freezing this graph, inspect enough available evidence to distinguish the
+material directions and risks. Do not invent a full production graph for an
+unresolved idea. Read `continuous-execution.md` for research and decision handling.
+Decision dependencies are real edges, but most decisions within delegated authority
+belong to the controller, not the user. Internal stage boundaries are not approval
+requests. Research handoffs name what uncertainty their evidence resolves and what
+finding would change the consuming decision; document existence alone is not a pass.
+
 ## Contribution Roles
 
 Every strict multi-lane plan assigns one role to every lane:

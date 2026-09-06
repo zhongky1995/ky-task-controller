@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0 — 2026-09-07
+
+- Front-load bounded evidence discovery before committing to a production plan or asking for user decisions; continue targeted research during execution.
+- Treat internal lane checkpoints as quality checks rather than repeated user approvals. Clear scoped execution requests authorize continuous in-scope work without ceremonial plan confirmation.
+- Preserve planning-only stops, reserved decisions, commercial/fingerprint approvals, independent verification, and explicit native Session consent.
+- Add judgment-dependent research handoffs and behavioral review cases. This is a controller-guidance update, not a semantic feedback-classifier or dependency-local invalidation implementation.
+- Add durable inquiry checkpoints and MCP/CLI read/update tools: original intent, current understanding, evidence, hypotheses, pending questions/feedback, next action, and evidence-linked change history.
+- Support inquiry-only discovery before contract initialization, adopt its history into execution state, and retain inquiry across contract revisions. Record inquiry sequence at worker registration.
+- Enforce optimistic sequence checks, immutable item identity/history, evidence references, and idempotent events. Atomically link material uncertain/confirmed execution impacts to existing correction gates; ordinary updates do not request approval or invalidate execution.
+
 ## 0.7.0 — 2026-09-05
 
 - Unified ready/next/finalization checks; revision-invalidated lanes are dispatchable again, while failed/blocked lanes require explicit recovery.

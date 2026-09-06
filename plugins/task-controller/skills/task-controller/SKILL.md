@@ -55,9 +55,17 @@ Orchestration is a first-class control stage, not a side effect of lane order:
 
 ## Use With Task Boundary Planner
 
-- If no task contract exists, first create or request one. If `task-boundary-planner` is available and relevant, use it to lock the contract.
+- If no task contract exists, first inspect the available evidence needed to make one credible. Do not ask the user to supply a complete contract or approve every research step. If `task-boundary-planner` is relevant, use it to form the bounded execution contract.
 - If a contract already exists and the user says to continue, do not replan. Dispatch the next dependency-ready batch.
 - If the user asks why a previous execution failed, compare the run against the lane gates and write-boundary rules.
+
+## Continuous Execution And User Decisions
+
+For consequential multi-turn inquiry, read `references/inquiry-ledger.md`. Use `task_controller_inquiry_status` to resume and `task_controller_update_inquiry` at meaningful evidence/understanding changes. Maintain it in the background without adding user confirmation rounds. It works before contract initialization and is retained through execution/revision; confirmed or uncertain material contract impacts connect atomically to existing correction gates.
+
+Read `references/continuous-execution.md` when planning research, deciding whether to interrupt the user, or responding to new evidence. Front-load enough research to support a direction, then investigate, produce, and verify continuously within the authorized scope. Do not add a mandatory inquiry phase or Session.
+
+Internal lane gates default to controller/worker verification, not human approval. A clear scoped execution request does not need another approval of the controller's own plan. Continue after passing internal checkpoints; ask only for a reserved choice, missing authority, explicit human gate, or material change in scope/commitment. Consolidate related decisions with evidence and a recommendation, and continue independent authorized work while awaiting feedback. Never bypass required commercial/user approval, sample, independent-review, or native Session consent rules.
 
 ## Controller Rules
 
@@ -312,7 +320,7 @@ When `userApprovalGate.required` is true, record approval with `record-approval`
 
 When `sampleGate.required` is true, the sample lane must be current-revision `done/pass`, including its named `acceptanceIds`, before any lane in `blocks` can register, gate, callback-pass, or complete.
 
-If a worker sees correction language, it must submit a `correctionEvents` entry with an explicit `recommendedInvalidFromLane` instead of interpreting the text as ordinary notes. The callback cannot pass. If the controller directly observes user language such as “不对”, “我要的是”, “按上一版”, “目标变了”, “不要改这个”, “保留原样”, “不能收费”, “重复收费”, “样稿不对”, or “来源换了”, call `task_controller_ingest_feedback` immediately. It classifies and atomically records contract-level feedback; do not first reinterpret it as an ordinary edit. Use `task_controller_classify_feedback` only for read-only inspection. Then call `task_controller_revise_contract` to consume every open event ID, using an `invalidFromLane` no later than the earliest recommendation. Every open correction blocks registration, gates, and completion. Strict revision always supplies the complete replacement `contractSpec`; proactive revision without a correction is still allowed. `task_controller_record_correction` remains the explicit low-level fallback.
+If a worker finds a confirmed contract-impacting correction or contradictory evidence, it must submit a `correctionEvents` entry with an explicit `recommendedInvalidFromLane`; that callback cannot pass. The controller must assess meaning and affected premises, not just correction keywords. `task_controller_classify_feedback` is read-only heuristic assistance: quoted/negated correction words and diagnostic questions can be false positives, and evidence without keywords can be missed. For confirmed impact, use `task_controller_ingest_feedback` when its classification matches the actual change, or `task_controller_record_correction` with evidence and affected requirements when it does not. Do not ignore an actual change or dispatch dependent work while its material impact remains unresolved. Then call `task_controller_revise_contract` to consume every open event ID, using an `invalidFromLane` no later than the earliest recommendation. Every open correction blocks registration, gates, and completion; a false positive already ingested must also be resolved through revision, not bypassed. Strict revision always supplies the complete replacement `contractSpec`; proactive revision without a correction is still allowed. See `references/continuous-execution.md`.
 
 This state machine is not a security sandbox. It cannot stop a controller or worker that bypasses KY-TASK and directly calls an external write tool. It only makes KY-TASK-managed dispatch, registration, callback pass, gate, and completion fail closed. Controller prompts and operating discipline must prohibit direct-write bypasses.
 
@@ -335,6 +343,8 @@ Installed MCP tools can also record worker/session state:
 - `task_controller_update_worker`
 - `task_controller_list_workers`
 - `task_controller_classify_feedback`
+- `task_controller_inquiry_status`
+- `task_controller_update_inquiry`
 - `task_controller_ingest_feedback`
 - `task_controller_record_correction`
 - `task_controller_record_approval`

@@ -8,6 +8,12 @@ one, the accepted `OrchestrationPlan` must already declare the lane's
 `dependencyReasons`, input/output contracts, handoff policy, and lane-level
 capability requirement.
 
+Gates below are internal quality checks unless the accepted contract explicitly
+requires a user decision. Passing a gate should advance authorized work, not
+generate another confirmation request. For uncertain inputs, include the premise
+to verify, evidence that would change it, and the downstream decision in the
+existing input/output contract; see `continuous-execution.md`.
+
 ## Evidence Lane
 
 ```text
