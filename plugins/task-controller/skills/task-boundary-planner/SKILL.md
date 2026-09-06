@@ -13,7 +13,11 @@ Core principle: allow unknowns, but do not allow an unbounded task.
 
 ## Outcome
 
-For complex tasks, produce a compact `任务契约 v0` before substantial execution. When this skill is explicitly invoked as a planning step, stop at the contract, gates, and execution/handoff plan. After the user explicitly approves the locked contract or says to continue execution, advance through the agreed execution lanes instead of replanning from scratch. Do not keep reopening the boundary unless a change trigger fires.
+For complex tasks, inspect enough available evidence to form a compact `任务契约 v0` before substantial execution. Relevant read-only discovery does not require a complete contract. When invoked as a planning step, stop at the contract and execution/handoff plan. A clear scoped execution request already authorizes work within that scope; do not require a second ceremonial approval of the plan you just derived. Preserve explicit planning-only limits, reserved decisions, and separate runtime/write permissions. After execution is authorized, advance through the dependency-ready lanes instead of replanning from scratch or asking at every checkpoint.
+
+Read `../task-controller/references/continuous-execution.md` when deciding research depth, confirmation points, or how to continue complex work. Internal decomposition must not become repeated user approval work.
+
+When inquiry spans meaningful turns or handoffs, read `../task-controller/references/inquiry-ledger.md` and maintain the current understanding, evidence, hypotheses, questions, and next action using the inquiry tools. A new inquiry-only state does not require a complete execution contract; normal init later adopts its history. Do not require users to fill this record or approve each update.
 
 ## Operating Rules
 
@@ -25,19 +29,19 @@ For complex tasks, produce a compact `任务契约 v0` before substantial execut
 - Treat explicit `$task-boundary-planner` invocation as planning-only by default: do not modify final artifacts, update external documents, generate polished deliverables, launch background sessions, or perform broad execution in the same response.
 - Treat a later user message such as "继续", "进执行", "按这个执行", "优化吧", or "开始做" after a locked contract as an execution trigger unless the same message says not to execute.
 - On execution-trigger turns, do not repeat the full contract. Identify the next lane, restate its write boundary, execute only that lane or the approved execution phase, leave an intermediate artifact/checkpoint, and state whether the final deliverable is complete.
-- Identify the final deliverable first. The final deliverable sets the main acceptance standard.
+- Identify the intended outcome first. When its final form is uncertain, investigate the consequential unknowns before promising a final artifact or complete lane graph.
 - If the user asks to "think first" or "do not execute yet", still separate the final deliverable from the current phase deliverable.
 - Identify the professional lens and minimum reliable standard. Do not stop at generic labels like "high standard".
 - For high-standard composite tasks, define the object model before execution: metrics, business lines, units, artifacts, actors, charts, modules, or scenes.
 - Identify capacity drivers and one-pass limits. Do not stop at generic labels like "high capacity".
 - Lock the current task version once a workable contract exists.
 - After locking, prefer local corrections over boundary resets.
-- Execution starts only after an execution trigger: user confirmation after the contract, or a previously agreed workflow contract that already grants execution.
+- Execution starts within an explicit scoped execution request, user confirmation after a planning-only contract, or a previously agreed workflow that grants execution. A controller-generated checkpoint is not a new authorization boundary.
 - Reopen the contract only when a defined change trigger fires.
 
 ## Stable Protocol
 
-Use this sequence for complex tasks:
+After bounded initial discovery, use this sequence to organize complex tasks internally. It is not a sequence of user confirmation rounds:
 
 1. Deliverable: define the final artifact, audience, use context, and decision/action it supports.
 2. Delivery mode: decide how the artifact will be consumed or operated; set mode-specific constraints.
@@ -116,6 +120,7 @@ Not allowed in planning-only mode:
 
 Execution may start only when one of these is true:
 
+- The current request explicitly includes execution within clear scope, rather than planning only; a named planning skill does not negate that explicit instruction.
 - The user replies after the contract with explicit approval to execute the plan.
 - A previously accepted workflow contract already grants a defined execution phase.
 
@@ -140,14 +145,14 @@ Before taking action, run a compact readiness check:
 
 Rules:
 
-- If the next lane is evidence, object/model, metric/chart, or product/experience, prefer read-only outputs and stop at a checkpoint unless the user approved a full lane sequence.
+- If the next lane is evidence, object/model, metric/chart, or product/experience, prefer read-only outputs, record and verify its checkpoint, and continue within the authorized scope. Stop only for a real unresolved dependency, reserved decision, or explicit user-requested checkpoint.
 - If the next lane writes to Feishu/Base/docs/decks/workbooks/code or customer-facing artifacts, verify that all upstream lane gates required by the contract exist.
 - If upstream gates are missing, do not write the final artifact. Produce the missing lane artifact instead and say what must pass before implementation.
 - If the user explicitly approved a full execution package, continue lane by lane, but still preserve intermediate outputs and do not merge review into implementation.
 - Before choosing Sessions or sequential execution for a composite task, compile a strict work orchestration plan. QA/review must depend on the decision, sample, or artifact it judges; high-loss design/production work stays together unless a concrete handoff contract exists.
 - If mandatory distributed-execution rules are hit, first check native Codex Session tools. Under the Session-first policy, hand off the dependency-ready batch to visible Session workers rather than managed subagents or sequential current-thread lanes.
 - Use sequential lanes only after recording that independent worker runtimes are unavailable, the user rejects background worker execution, or the turn is planning-only with no final write.
-- End each execution response with one of: `当前 lane 完成，等待确认进入下一 lane`; `当前 lane 完成，已按已批准流程继续`; `最终交付物完成`; or `阻塞，缺少...`.
+- Report meaningful progress without requiring a reply. Do not end execution merely because a lane finished; at handoff state the completed outcome or the concrete blocker/decision and what work it affects.
 
 ## Execution Handoff
 
@@ -423,7 +428,7 @@ Avoid:
 
 ## Evidence-First Planning
 
-Before executing a high-standard task, inspect the smallest evidence packet needed to make the plan credible. If evidence is not available, make the first phase an evidence acquisition phase.
+Before committing to a high-standard production plan or asking the user to choose a direction, inspect enough available evidence to identify the likely direction and material risks. Stop front-loaded research when further investigation is unlikely to change the next authorized action; continue targeted research during execution. If evidence is unavailable, try accessible in-scope sources before asking for only the missing input. Research is not a mandatory separate lane or exhaustive report.
 
 For data/client-facing analysis, this often means:
 
@@ -455,7 +460,7 @@ After `任务契约 v0` is locked, classify new information:
 
 If it is not a contract change, do not restart the task. Patch locally and continue.
 
-When KY-TASK state is active, direct user correction language such as “不对”, “我要的是”, or “按上一版” is still a controller event even before a worker reports it. Call `task_controller_record_correction` with a unique event ID, summary, category, affected requirement IDs, and required `recommendedInvalidFromLane`; then use `task_controller_revise_contract` to consume all open corrections before resuming registration, gates, or completion.
+When KY-TASK state is active, assess whether feedback or new evidence actually changes an accepted premise, requirement, or permission. Correction words are signals, not sufficient proof; questions and quoted/negated phrases are not implementation authorization. For confirmed contract impact, even without keywords, call `task_controller_record_correction` with a unique event ID, evidence-backed summary, category, affected requirement IDs, and required `recommendedInvalidFromLane`; then use `task_controller_revise_contract` to consume all open corrections before resuming registration, gates, or completion. Follow `../task-controller/references/continuous-execution.md`; do not ask the user to reconfirm an already explicit change merely to satisfy internal bookkeeping.
 
 ## Verification
 

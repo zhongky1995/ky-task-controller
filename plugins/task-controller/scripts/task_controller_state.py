@@ -24,6 +24,7 @@ if str(PLUGIN_ROOT) not in sys.path:
     sys.path.insert(0, str(PLUGIN_ROOT))
 
 from control_plane.blueprint import compile_blueprint, validate_blueprint
+from control_plane.inquiry import advance as advance_inquiry, compact as compact_inquiry
 from control_plane.capability_router import shadow_route
 from control_plane.decision_governance import (
     AUTHORITIES,
@@ -120,6 +121,7 @@ DECISION_STATUSES = {"binding", "advisory", "superseded"}
 ARTIFACT_ROLES = {"entrypoint", "appendix", "source"}
 DESTRUCTIVE_ACTIONS = {"delete", "drop", "remove", "replace", "truncate", "overwrite", "purge"}
 MUTATING_COMMANDS = {
+    "update-inquiry",
     "init",
     "complete-lane",
     "insert-lane",
@@ -2422,7 +2424,11 @@ def evaluate_gate(
 
 def init(args: argparse.Namespace) -> None:
     path = Path(args.state).expanduser()
-    if path.exists() and not args.force:
+    prior_inquiry = load_state(path) if path.exists() else {}
+    inquiry_only = prior_inquiry.get("stateKind") == "inquiry-only"
+    if inquiry_only and prior_inquiry["inquiry"]["events"][-1]["impact"] != "none":
+        fail("Resolve inquiry impact before initializing execution.")
+    if path.exists() and not args.force and not inquiry_only:
         fail(f"State file already exists. Use --force to replace: {path}")
     lane_definitions = load_json_value(args.lane_definitions) if args.lane_definitions else None
     if lane_definitions is not None and not isinstance(lane_definitions, list):
@@ -2668,6 +2674,8 @@ def init(args: argparse.Namespace) -> None:
         "finalization": {"status": "open"},
         "revisions": [{"revision": 1, "created_at": now(), "reason": "initial contract"}],
     }
+    if prior_inquiry.get("inquiry"):
+        state["inquiry"] = prior_inquiry["inquiry"]
     if plan:
         state.update(
             {
@@ -3323,6 +3331,7 @@ def register_worker(args: argparse.Namespace) -> None:
     prompt = f"{prompt}\n{runtime_envelope}".strip()
     worker = {
         "workerId": worker_id,
+        "inquirySequence": state.get("inquiry", {}).get("sequence", 0),
         "threadId": thread_id,
         "runtimeHandle": runtime_handle,
         "requestId": request_id,
@@ -3579,6 +3588,56 @@ def record_correction(args: argparse.Namespace) -> None:
     invalidate_finalization(state, f"correction opened: {event_id}")
     save_state(path, state)
     print(json.dumps(event, ensure_ascii=False, indent=2))
+
+
+def inquiry_status(args: argparse.Namespace) -> None:
+    state = load_state(Path(args.state).expanduser())
+    result = compact_inquiry(state.get("inquiry"))
+    result["contractRevision"] = state.get("contractRevision")
+    result["openCorrectionEvents"] = open_correction_events(state)
+    if args.history:
+        result["history"] = state.get("inquiry", {}).get("events", [])
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def update_inquiry(args: argparse.Namespace) -> None:
+    path = Path(args.state).expanduser()
+    state = load_state(path) if path.exists() else {"stateKind": "inquiry-only"}
+    attached = state.get("stateKind") != "inquiry-only"
+    if attached:
+        require_continuation_state(state)
+    checkpoint = load_json_value(args.checkpoint)
+    try:
+        ledger, replay = advance_inquiry(state.get("inquiry"), event_id=args.event_id,
+            expected_sequence=args.expected_sequence, checkpoint=checkpoint, reason=args.reason,
+            evidence_ids=parse_csv(args.evidence_ids), impact=args.impact, timestamp=now(),
+            contract_revision=state.get("contractRevision"),
+            impact_target={"requirementIds": parse_csv(args.requirement_ids), "invalidFromLane": args.recommended_invalid_from_lane})
+    except ValueError as exc:
+        fail(str(exc))
+    if replay:
+        print(json.dumps({**compact_inquiry(ledger), "idempotentReplay": True, "openCorrectionEvents": open_correction_events(state)}, ensure_ascii=False))
+        return
+    if attached and args.impact != "none":
+        lane = require_nonempty(args.recommended_invalid_from_lane, "recommendedInvalidFromLane")
+        find_lane(state, lane)
+        requirements = parse_csv(args.requirement_ids)
+        if not requirements:
+            fail("contract impact requires requirementIds")
+        correction_id = "inquiry:" + args.event_id
+        if any(event["id"] == correction_id for event in state.get("correctionEvents", [])):
+            fail("inquiry correction ID collision")
+        state.setdefault("correctionEvents", []).append({
+            "id": correction_id, "status": "open", "source": "inquiry", "fromLane": "controller",
+            "summary": args.reason, "category": args.impact, "requirementIds": requirements,
+            "recommendedInvalidFromLane": lane, "contractRevision": state["contractRevision"],
+            "inquirySequence": ledger["sequence"], "evidenceIds": parse_csv(args.evidence_ids), "created_at": now(),
+        })
+        stale_current_approvals(state, f"inquiry impact: {correction_id}")
+        invalidate_finalization(state, f"inquiry impact: {correction_id}")
+    state["inquiry"] = ledger
+    save_state(path, state)
+    print(json.dumps({**compact_inquiry(ledger), "openCorrectionEvents": open_correction_events(state)}, ensure_ascii=False, indent=2))
 
 
 def record_approval(args: argparse.Namespace) -> None:
@@ -4515,6 +4574,23 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--state", required=True)
     p.set_defaults(func=list_workers)
 
+    p = sub.add_parser("inquiry-status")
+    p.add_argument("--state", required=True)
+    p.add_argument("--history", action="store_true")
+    p.set_defaults(func=inquiry_status)
+
+    p = sub.add_parser("update-inquiry")
+    p.add_argument("--state", required=True)
+    p.add_argument("--event-id", required=True)
+    p.add_argument("--expected-sequence", required=True, type=int)
+    p.add_argument("--checkpoint", required=True, help="Complete inquiry checkpoint JSON or @path")
+    p.add_argument("--reason", required=True)
+    p.add_argument("--evidence-ids", required=True)
+    p.add_argument("--impact", required=True, choices=["none", "uncertain", "contract_change"])
+    p.add_argument("--requirement-ids", default="")
+    p.add_argument("--recommended-invalid-from-lane", default="")
+    p.set_defaults(func=update_inquiry)
+
     p = sub.add_parser("classify-feedback")
     p.add_argument("--state", default="")
     p.add_argument("--feedback", required=True)
@@ -4646,11 +4722,17 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
+    def invoke():
+        path = Path(args.state).expanduser() if getattr(args, "state", "") else None
+        if path and path.exists() and load_state(path).get("stateKind") == "inquiry-only":
+            if args.cmd not in {"init", "status", "inquiry-status", "update-inquiry", "classify-feedback"}:
+                fail("Inquiry-only state cannot execute; initialize a bounded contract first.")
+        args.func(args)
     if args.cmd in MUTATING_COMMANDS:
         with state_lock(Path(args.state).expanduser()):
-            args.func(args)
+            invoke()
     else:
-        args.func(args)
+        invoke()
 
 
 if __name__ == "__main__":

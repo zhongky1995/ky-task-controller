@@ -2,7 +2,7 @@
 
 [中文](README.md) · [MIT License](LICENSE)
 
-KY-TASK is a complex-task controller plugin for Codex Desktop. It locks a task contract, builds dependency-aware professional lanes, dispatches ready lanes to visible project-scoped Codex Sessions, collects callbacks, and performs independent final verification.
+KY-TASK is a complex-task controller plugin for Codex Desktop. It investigates enough evidence to establish an executable boundary, builds dependency-aware professional lanes, dispatches ready lanes to visible project-scoped Codex Sessions, collects callbacks, and performs independent final verification. Unclear goals can be investigated before committing to a full production plan.
 
 ## Why it exists
 
@@ -10,6 +10,8 @@ Complex work often fails when research, design, implementation, and review share
 
 KY-TASK addresses those failure modes with:
 
+- durable inquiry checkpoints for understanding, evidence, hypotheses, open questions, and reasons for change; inquiry can begin before a contract and survives execution/revision without user forms or repeated confirmations;
+- front-loaded bounded research and continuous authorized execution across internal quality checkpoints, with user input reserved for consequential choices and actual permission/approval gates;
 - explicit goals, boundaries, deliverables, and acceptance gates;
 - first-class work orchestration that separates decomposition, parallel/serial planning, per-lane capability matching, and runtime selection;
 - visible native Codex Sessions for distributed work instead of silent Sub Agent fallback;
@@ -20,7 +22,7 @@ KY-TASK addresses those failure modes with:
 - exclusive durable write boundaries;
 - structured callbacks and separate implementation/review lanes;
 - decision authority for high-impact commercial changes, with pricing structure, billable items, budget allocation, and KPI binding defaulting to propose-then-confirm;
-- atomic feedback ingestion that opens contract corrections, stales approvals, and blocks execution when the user says the commercial logic is wrong;
+- atomic inquiry-impact/correction recording that stales approvals and blocks execution until revision; the controller judges meaning, while keyword classification remains heuristic and correction blocking remains global rather than branch-local;
 - a shared worker-runtime profile registry for capability-based selection and audit binding;
 - an extensible registry for document, spreadsheet, deck, Lark, and code capabilities.
 - a generic strict orchestration path when no scenario pack matches, without adding domain exceptions or falling back to a fixed five-lane template.

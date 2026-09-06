@@ -248,7 +248,7 @@ If the current environment cannot run independent workers, run lanes sequentiall
 5. Final implementation.
 6. Review lane output.
 
-Do not collapse these into one uninterrupted execution block. Each lane must leave an intermediate artifact or explicit checkpoint.
+Keep each lane's intermediate artifact or explicit checkpoint so its acceptance can be checked. Execution may continue uninterrupted across passing checkpoints within the authorized scope; lane separation does not require separate user turns.
 
 Use these checkpoint labels:
 
@@ -258,7 +258,7 @@ Use these checkpoint labels:
 - `Implementation lane checkpoint`
 - `Review lane checkpoint`
 
-At each checkpoint, state whether the next lane is already approved or needs confirmation.
+At each checkpoint, verify the next lane's dependencies and authority internally, then continue when ready. Ask the user only for an actual reserved decision or missing permission, not because a checkpoint was reached. See `../../task-controller/references/continuous-execution.md`.
 
 ## Controller Responsibilities
 

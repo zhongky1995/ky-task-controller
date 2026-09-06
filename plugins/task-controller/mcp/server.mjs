@@ -985,6 +985,40 @@ const tools = [
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
+    name: "task_controller_inquiry_status",
+    title: "KY-TASK: Read Inquiry Checkpoint",
+    description: "Read current understanding, evidence, hypotheses, unresolved questions and last change. Optional history; reading does not modify state or authorize execution.",
+    inputSchema: { type: "object", properties: { statePath: { type: "string" }, history: { type: "boolean", default: false } }, required: ["statePath"] },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "task_controller_update_inquiry",
+    title: "KY-TASK: Update Inquiry Checkpoint",
+    description: "Persist an evidence-linked inquiry checkpoint with optimistic concurrency and immutable history. Can begin before a contract at a new statePath; init adopts it later. In execution state, uncertain or confirmed contract impact atomically opens a correction; this does not stop host workers or grant approval.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        statePath: { type: "string" }, eventId: { type: "string", minLength: 1 },
+        expectedSequence: { type: "integer", minimum: 0 },
+        checkpoint: {
+          type: "object", additionalProperties: false,
+          required: ["originalIntent", "understanding", "evidence", "hypotheses", "questions", "nextAction"],
+          properties: {
+            originalIntent: { type: "string", minLength: 1 }, understanding: { type: "string", minLength: 1 }, nextAction: { type: "string", minLength: 1 },
+            evidence: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "source", "summary"], properties: { id: { type: "string" }, source: { type: "string" }, summary: { type: "string" } } } },
+            hypotheses: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "claim", "status", "evidenceIds"], properties: { id: { type: "string" }, claim: { type: "string" }, status: { enum: ["untested", "supported", "refuted", "uncertain"] }, evidenceIds: { type: "array", items: { type: "string" } } } } },
+            questions: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "question", "status", "waitingOn", "answer", "evidenceIds"], properties: { id: { type: "string" }, question: { type: "string" }, status: { enum: ["open", "answered", "withdrawn"] }, waitingOn: { enum: ["controller", "user", "external", "none"] }, answer: { type: "string" }, evidenceIds: { type: "array", items: { type: "string" } } } } },
+          },
+        },
+        reason: { type: "string", minLength: 1 }, evidenceIds: { type: "array", minItems: 1, items: { type: "string" } },
+        impact: { enum: ["none", "uncertain", "contract_change"] },
+        requirementIds: { type: "array", items: { type: "string" } }, recommendedInvalidFromLane: { type: "string" },
+      },
+      required: ["statePath", "eventId", "expectedSequence", "checkpoint", "reason", "evidenceIds", "impact"],
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
     name: "task_controller_classify_feedback",
     title: "KY-TASK: Classify User Feedback",
     description: "Read-only classification of user feedback as approval, question, local edit, or contract correction, including the earliest safe invalidation lane.",
@@ -1511,6 +1545,22 @@ async function handleToolCall(id, params) {
   }
   if (name === "task_controller_list_workers") {
     toolResult(id, "list-workers", args.statePath);
+    return;
+  }
+  if (name === "task_controller_inquiry_status") {
+    if (args.history) argv.push("--history");
+    toolResult(id, "inquiry-status", args.statePath, argv);
+    return;
+  }
+  if (name === "task_controller_update_inquiry") {
+    if (!Number.isInteger(args.expectedSequence) || args.expectedSequence < 0) throw new Error("expectedSequence must be a nonnegative integer");
+    if (!Array.isArray(args.evidenceIds) || !args.evidenceIds.length) throw new Error("evidenceIds must be nonempty");
+    argv.push("--event-id", requireString(args.eventId, "eventId"), "--expected-sequence", String(args.expectedSequence),
+      "--checkpoint", JSON.stringify(args.checkpoint), "--reason", requireString(args.reason, "reason"),
+      "--evidence-ids", args.evidenceIds.map(x => requireString(x, "evidenceId")).join(","), "--impact", requireString(args.impact, "impact"));
+    if (args.requirementIds) argv.push("--requirement-ids", args.requirementIds.map(x => requireString(x, "requirementId")).join(","));
+    pushString(argv, "--recommended-invalid-from-lane", args.recommendedInvalidFromLane);
+    toolResult(id, "update-inquiry", args.statePath, argv);
     return;
   }
   if (name === "task_controller_classify_feedback") {
