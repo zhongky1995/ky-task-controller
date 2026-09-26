@@ -994,7 +994,7 @@ const tools = [
   {
     name: "task_controller_update_inquiry",
     title: "KY-TASK: Update Inquiry Checkpoint",
-    description: "Persist an evidence-linked inquiry checkpoint with optimistic concurrency and immutable history. Can begin before a contract at a new statePath; init adopts it later. In execution state, uncertain or confirmed contract impact atomically opens a correction; this does not stop host workers or grant approval.",
+    description: "Persist an evidence-linked inquiry checkpoint, or patch an existing one by item ID. Supply exactly one of checkpoint/patch. Omitted items are retained; no deletion or identity rewriting. Optimistic concurrency and immutable history apply. Material contract impact opens a correction, not approval or host cancellation.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1010,11 +1010,22 @@ const tools = [
             questions: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "question", "status", "waitingOn", "answer", "evidenceIds"], properties: { id: { type: "string" }, question: { type: "string" }, status: { enum: ["open", "answered", "withdrawn"] }, waitingOn: { enum: ["controller", "user", "external", "none"] }, answer: { type: "string" }, evidenceIds: { type: "array", items: { type: "string" } } } } },
           },
         },
+        patch: {
+          type: "object", additionalProperties: false, minProperties: 1,
+          description: "Existing checkpoint only. Omit unchanged fields; arrays merge by ID. Existing entries may supply only changed status/evidenceIds/answer/waitingOn. New entries require the complete corresponding checkpoint item. Empty arrays retain all items.",
+          properties: {
+            understanding: { type: "string", minLength: 1 }, nextAction: { type: "string", minLength: 1 },
+            evidence: { type: "array", items: { type: "object", required: ["id"], properties: { id: { type: "string" }, source: { type: "string" }, summary: { type: "string" } }, additionalProperties: false } },
+            hypotheses: { type: "array", items: { type: "object", required: ["id"], properties: { id: { type: "string" }, claim: { type: "string" }, status: { enum: ["untested", "supported", "refuted", "uncertain"] }, evidenceIds: { type: "array", items: { type: "string" } } }, additionalProperties: false } },
+            questions: { type: "array", items: { type: "object", required: ["id"], properties: { id: { type: "string" }, question: { type: "string" }, status: { enum: ["open", "answered", "withdrawn"] }, waitingOn: { enum: ["controller", "user", "external", "none"] }, answer: { type: "string" }, evidenceIds: { type: "array", items: { type: "string" } } }, additionalProperties: false } },
+          },
+        },
         reason: { type: "string", minLength: 1 }, evidenceIds: { type: "array", minItems: 1, items: { type: "string" } },
         impact: { enum: ["none", "uncertain", "contract_change"] },
         requirementIds: { type: "array", items: { type: "string" } }, recommendedInvalidFromLane: { type: "string" },
       },
-      required: ["statePath", "eventId", "expectedSequence", "checkpoint", "reason", "evidenceIds", "impact"],
+      required: ["statePath", "eventId", "expectedSequence", "reason", "evidenceIds", "impact"],
+      oneOf: [{ required: ["checkpoint"], not: { required: ["patch"] } }, { required: ["patch"], not: { required: ["checkpoint"] } }],
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
@@ -1555,8 +1566,10 @@ async function handleToolCall(id, params) {
   if (name === "task_controller_update_inquiry") {
     if (!Number.isInteger(args.expectedSequence) || args.expectedSequence < 0) throw new Error("expectedSequence must be a nonnegative integer");
     if (!Array.isArray(args.evidenceIds) || !args.evidenceIds.length) throw new Error("evidenceIds must be nonempty");
+    const hasPatch = Object.hasOwn(args, "patch");
+    if (hasPatch === Object.hasOwn(args, "checkpoint")) throw new Error("Supply exactly one of checkpoint/patch");
     argv.push("--event-id", requireString(args.eventId, "eventId"), "--expected-sequence", String(args.expectedSequence),
-      "--checkpoint", JSON.stringify(args.checkpoint), "--reason", requireString(args.reason, "reason"),
+      hasPatch ? "--patch" : "--checkpoint", JSON.stringify(hasPatch ? args.patch : args.checkpoint), "--reason", requireString(args.reason, "reason"),
       "--evidence-ids", args.evidenceIds.map(x => requireString(x, "evidenceId")).join(","), "--impact", requireString(args.impact, "impact"));
     if (args.requirementIds) argv.push("--requirement-ids", args.requirementIds.map(x => requireString(x, "requirementId")).join(","));
     pushString(argv, "--recommended-invalid-from-lane", args.recommendedInvalidFromLane);

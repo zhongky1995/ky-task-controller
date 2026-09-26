@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.1 — 2026-09-27
+
+- Refocus controller guidance on user purpose, useful collaboration, evolving understanding and synthesized outcomes across domains; distinguish supported candidates from selected/authorized decisions.
+- Clarify inquiry/execution/review transitions, proportionate verification of consequential completion claims, and reuse of valid evidence without forcing more approval rounds or domain-specific release stages.
+- Add optional ID-based inquiry patches to the existing CLI/MCP update tool. Omitted content is retained; snapshots, immutable history, evidence validation, sequence conflict checks, replay safety and atomic correction gates remain compatible.
+- Preserve the existing narrowed activation guidance. No new mandatory lanes, approval states or software-specific repair workflow.
+
 ## 0.8.0 — 2026-09-07
 
 - Front-load bounded evidence discovery before committing to a production plan or asking for user decisions; continue targeted research during execution.

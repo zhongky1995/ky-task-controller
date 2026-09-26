@@ -1,15 +1,21 @@
 ---
 name: task-boundary-planner
-description: Generate and control a reliable task contract before complex work, then continue into gated execution lanes after explicit approval. Clarify requirements, task boundaries, delivery/use mode, evidence status, domain-specific professional standards, minimum reliable standards, production/tool boundaries, capacity limits, execution triggers, optional single-thread or distributed-worker handoff plans, risks, assumptions, and acceptance criteria. Use when the user asks to 梳理需求, define task boundaries, plan a complex task, reduce hallucination risk, decide what to ask before execution, create acceptance criteria, review prior task failures, plan script/creative/content outputs, plan case/whitepaper material work, plan operating dashboards or Feishu/Base management systems, plan or continue distributed/gated execution, or analyze a repository/project before substantial work.
+description: 为需要明确目标、范围、依赖、验收或阶段交接的复杂项目形成任务约定；支持用户要求的任务定界与已约定的 KY-TASK 规划。普通问答、局部修改、开放讨论和常规分析不因涉及“优化、方案、代码、文案”就需要任务契约。
 ---
 
 # Task Boundary Planner
+
+## Intent and proportionality
+
+Understand what the user is trying to understand, decide, or accomplish in the current context before selecting an artifact or workflow. Read their proposed cause or solution as a hypothesis unless confirmed. Carry forward valid context and corrections; a new sentence does not by itself reset the task.
+
+Use the contract and protocol only to resolve consequential scope or coordination needs. A simple task may need only a sentence of working understanding, with direct execution where authorized. An inquiry can legitimately end with understanding rather than a production plan. The schema is a completeness aid for relevant decisions, not a requirement to invent artifacts, roles or questions.
 
 ## Purpose
 
 Convert an ambiguous request into a reliable current-version task contract. Do not try to make requirements perfect. Define what can be done now, what professional standards apply, what evidence is required, what is out of scope, and what would justify reopening the boundary.
 
-Core principle: allow unknowns, but do not allow an unbounded task.
+Core principle: allow unknowns, but do not allow an unbounded task. A contract bounds authorized work; it does not freeze every explanation or turn an agent's proposed solution into the user's intent. Keep candidate directions distinct from selected decisions and note the evidence or delegated authority for material selections. An inquiry may end with a useful understanding rather than a production plan.
 
 ## Outcome
 
@@ -89,7 +95,7 @@ Return this structure, keeping it short:
 - 变更触发:
 ```
 
-If the task is small, compress the contract into 5-7 bullets. If the task is high-stakes, large, or client-facing, keep the full contract.
+For small tasks, use a brief working understanding only if it helps. For complex tasks, include contract fields that change decisions, coordination or acceptance; do not fill irrelevant fields for completeness.
 
 ## Final vs Phase Deliverable
 
@@ -124,7 +130,7 @@ Execution may start only when one of these is true:
 - The user replies after the contract with explicit approval to execute the plan.
 - A previously accepted workflow contract already grants a defined execution phase.
 
-If the user asks for a skill review, failure diagnosis, boundary check, or "先梳理", stop after the contract and recommended next action.
+A review or diagnosis request should receive the requested findings and evidence. If the same request also authorizes fixes, continue with those fixes. Stop at planning only when the user limited the work to planning or a real dependency prevents execution.
 
 ## Post-Contract Execution Mode
 
@@ -458,7 +464,7 @@ After `任务契约 v0` is locked, classify new information:
 - Delivery-mode correction: adjust layout, density, navigation, packaging, or verification to match how the artifact will actually be used.
 - Contract change: reopen only when the final deliverable changes, evidence disproves a core claim, a professional standard was wrong, a capacity limit is exceeded, or a user changes a non-negotiable constraint.
 
-If it is not a contract change, do not restart the task. Patch locally and continue.
+If it is not a contract change, do not restart the task. Patch locally and continue. A newly opened design space calls for useful comparison or investigation, not immediate commitment to the first familiar solution. Conversely, a clearly selected and authorized direction need not be reopened merely to exhibit alternatives. Refer to `../task-controller/references/continuous-execution.md` for moving between inquiry, execution and review.
 
 When KY-TASK state is active, assess whether feedback or new evidence actually changes an accepted premise, requirement, or permission. Correction words are signals, not sufficient proof; questions and quoted/negated phrases are not implementation authorization. For confirmed contract impact, even without keywords, call `task_controller_record_correction` with a unique event ID, evidence-backed summary, category, affected requirement IDs, and required `recommendedInvalidFromLane`; then use `task_controller_revise_contract` to consume all open corrections before resuming registration, gates, or completion. Follow `../task-controller/references/continuous-execution.md`; do not ask the user to reconfirm an already explicit change merely to satisfy internal bookkeeping.
 

@@ -10,6 +10,8 @@ Complex work often fails when research, design, implementation, and review share
 
 KY-TASK addresses those failure modes with:
 
+- controller judgment that distinguishes intent, candidates, recommendations and decided commitments, supports inquiry/execution/review iteration, and synthesizes a fit-for-purpose result rather than concatenating worker reports;
+- optional ID-based inquiry patches that retain omitted evidence/history while preserving concurrency and correction checks;
 - durable inquiry checkpoints for understanding, evidence, hypotheses, open questions, and reasons for change; inquiry can begin before a contract and survives execution/revision without user forms or repeated confirmations;
 - front-loaded bounded research and continuous authorized execution across internal quality checkpoints, with user input reserved for consequential choices and actual permission/approval gates;
 - explicit goals, boundaries, deliverables, and acceptance gates;

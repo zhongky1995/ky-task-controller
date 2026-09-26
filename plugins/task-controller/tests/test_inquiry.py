@@ -145,10 +145,12 @@ class InquiryTests(unittest.TestCase):
             self.assertFalse(reply["result"].get("isError"), reply)
             return reply["result"]
         call("task_controller_update_inquiry", {"eventId": "mcp-1", "expectedSequence": 0, "checkpoint": checkpoint(), "reason": "Capture user observation", "evidenceIds": ["e1"], "impact": "none"})
+        call("task_controller_update_inquiry", {"eventId": "mcp-patch", "expectedSequence": 1, "patch": {"nextAction": "Compare explanations"}, "reason": "Reconsider alternatives", "evidenceIds": ["e1"], "impact": "none"})
         before = self.state.read_bytes()
         read = call("task_controller_inquiry_status", {"history": True})
         self.assertIn("mcp-1", json.dumps(read))
         self.assertEqual(before, self.state.read_bytes())
+        self.assertEqual("Compare explanations", json.loads(before)["inquiry"]["current"]["nextAction"])
 
     def test_replay_cannot_change_correction_target(self):
         self.ok("init", "--goal", "delivery", "--lanes", "design")
@@ -157,6 +159,78 @@ class InquiryTests(unittest.TestCase):
         before = self.state.read_bytes()
         args[args.index("--requirement-ids") + 1] = "r2"
         self.assertNotEqual(0, self.run_cli(*args).returncode)
+        self.assertEqual(before, self.state.read_bytes())
+
+    def patch_args(self, patch, seq=1, event="patch-1", impact="none"):
+        args = self.update_args(seq=seq, event=event, impact=impact)
+        index = args.index("--checkpoint")
+        args[index:index+2] = ["--patch", json.dumps(patch)]
+        return args
+
+    def test_patch_preserves_history_and_merges_ids(self):
+        self.ok(*self.update_args())
+        patch = {"evidence": [{"id": "e2", "source": "sample", "summary": "Coverage is complete"}],
+                 "hypotheses": [{"id": "h1", "status": "refuted", "evidenceIds": ["e2"]}],
+                 "questions": [{"id": "q1", "status": "answered", "waitingOn": "none", "answer": "Complete", "evidenceIds": ["e2"]}],
+                 "understanding": "Investigate a different explanation"}
+        updated = self.ok(*self.patch_args(patch))
+        self.assertEqual(2, len(updated["current"]["evidence"]))
+        self.assertEqual(checkpoint()["hypotheses"][0]["claim"], updated["current"]["hypotheses"][0]["claim"])
+        self.assertEqual(checkpoint()["nextAction"], updated["current"]["nextAction"])
+        history = self.ok("inquiry-status", "--history")["history"]
+        self.assertEqual(checkpoint(), history[0]["checkpoint"])
+        self.assertEqual("refuted", history[1]["checkpoint"]["hypotheses"][0]["status"])
+
+    def test_patch_replay_after_later_update_does_not_restore_old_state(self):
+        self.ok(*self.update_args())
+        args = self.patch_args({"nextAction": "Compare two candidates"})
+        self.ok(*args)
+        self.ok(*self.patch_args({"nextAction": "Execute the selected candidate"}, seq=2, event="patch-2"))
+        before = self.state.read_bytes()
+        replay = self.ok(*args)
+        self.assertTrue(replay["idempotentReplay"])
+        self.assertEqual(3, replay["sequence"])
+        self.assertEqual("Execute the selected candidate", replay["current"]["nextAction"])
+        changed = self.run_cli(*self.patch_args({"nextAction": "different"}))
+        self.assertNotEqual(0, changed.returncode)
+        self.assertEqual(before, self.state.read_bytes())
+
+    def test_invalid_patches_and_stale_writes_are_atomic(self):
+        self.assertNotEqual(0, self.run_cli(*self.patch_args({"understanding": "new"}, seq=0)).returncode)
+        self.assertFalse(self.state.exists())
+        self.ok(*self.update_args())
+        before = self.state.read_bytes()
+        for patch in ({}, {"originalIntent": "replacement"}, {"delete": ["h1"]},
+                      {"evidence": [{"id": "e1", "summary": "changed"}]},
+                      {"hypotheses": [{"id": "h1", "status": "supported", "evidenceIds": ["absent"]}]},
+                      {"hypotheses": [{"id": "h1"}, {"id": "h1"}]},
+                      {"questions": [{"id": "new"}]}, {"questions": None}):
+            with self.subTest(patch=patch):
+                self.assertNotEqual(0, self.run_cli(*self.patch_args(patch)).returncode)
+                self.assertEqual(before, self.state.read_bytes())
+        self.assertNotEqual(0, self.run_cli(*self.patch_args({"nextAction": "stale"}, seq=0)).returncode)
+        self.assertEqual(before, self.state.read_bytes())
+
+    def test_patch_preserves_contract_correction_guards(self):
+        self.ok("init", "--goal", "delivery", "--lanes", "design")
+        self.ok(*self.update_args())
+        args = self.patch_args({"understanding": "New evidence affects source scope"}, impact="contract_change")
+        before = self.state.read_bytes()
+        self.assertNotEqual(0, self.run_cli(*args).returncode)
+        self.assertEqual(before, self.state.read_bytes())
+        self.ok(*(args + ["--requirement-ids", "coverage", "--recommended-invalid-from-lane", "design"]))
+        self.assertNotEqual(0, self.run_cli("complete-lane", "--lane", "design", "--artifact", "output").returncode)
+        self.ok(*self.patch_args({"questions": []}, seq=2, event="supplement"))
+        self.assertEqual(1, len(self.ok("inquiry-status")["openCorrectionEvents"]))
+        self.assertEqual(1, len(self.ok("inquiry-status")["current"]["questions"]))
+
+    def test_concurrent_patches_and_mixed_payload_rejection(self):
+        self.ok(*self.update_args())
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda event: self.run_cli(*self.patch_args({"nextAction": event}, event=event)), ["a", "b"]))
+        self.assertEqual(1, sum(result.returncode == 0 for result in results))
+        before = self.state.read_bytes()
+        self.assertNotEqual(0, self.run_cli(*self.patch_args({"nextAction": "x"}, seq=2), "--checkpoint", json.dumps(checkpoint())).returncode)
         self.assertEqual(before, self.state.read_bytes())
 
 
