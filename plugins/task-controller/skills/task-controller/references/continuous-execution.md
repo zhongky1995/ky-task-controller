@@ -65,6 +65,23 @@ mechanisms; this reference grants no additional runtime or write permissions.
 
 ## Evidence Can Change The Plan
 
+Inquiry, execution and review can alternate within the same purpose. They are not
+fixed stages that must each run once. Distinguish:
+
+- an implementation adjustment inside the accepted scope: adapt and continue;
+- an unresolved premise: investigate the relevant uncertainty and preserve valid
+  findings, rather than restarting everything or asking the user to diagnose it;
+- a changed goal, reserved tradeoff or permission: explain the substantive change
+  and obtain only the input/authority actually missing before dependent action.
+
+Discussion-only authority does not become implementation authority when an idea
+looks promising. Existing execution authority does not vanish at an internal
+checkpoint. New user feedback may expand the design space; compare meaningful
+possibilities before selecting, without manufacturing a fixed number of options.
+Useful iteration is progress when it changes understanding or closes a real
+gap. Reduce repeated misunderstanding and duplicate administration, not the
+number of user contributions or review rounds.
+
 Keep observations, candidate explanations, user preferences, and approved decisions
 distinct. A new source may invalidate an assumption without correction keywords;
 a question or quoted phrase may contain those keywords without changing intent.
@@ -81,6 +98,24 @@ The runtime still invalidates an ordered suffix and requires new state for certa
 topology changes. This guidance does not implement dependency-local migration or
 automatically stop host workers. Preserve stop evidence and capacity accounting.
 
+## Synthesize For The Intended Use
+
+The controller integrates contributions into an answer, judgment, proposal or
+usable artifact appropriate to the request. Resolve or disclose conflicts and
+missing connections; multiple passing lane reports are not themselves a coherent
+result. A useful explanation can be a complete outcome without implementation.
+
+Match consequential claims to evidence: distinguish what a worker reported,
+what has been checked, and what remains conditional. Check relevant source,
+artifact, readback or user-path evidence according to the domain and risk; do not
+add a universal software-style release pipeline or recheck every minor output.
+User acceptance supports preference/authority, not factual or technical truth.
+State limitations where they affect use; do not bury them beneath test counts.
+
+Keep internal coordination detail out of the main delivery unless it helps the
+user act. The user should receive the usable result and its important boundaries,
+not be asked to reconcile worker drafts, versions or competing conclusions.
+
 ## Behavioral Review Cases
 
 Check decisions, not exact wording, when evaluating this protocol:
@@ -95,5 +130,10 @@ Check decisions, not exact wording, when evaluating this protocol:
 | New evidence contradicts an accepted premise without keywords | Assess impact and revise affected work if confirmed; do not silently continue |
 | User asks why something is wrong but says not to change it | Diagnose; do not infer implementation authority from correction words |
 | Missing source affects one branch only | Investigate or ask for that source; continue independent authorized work |
+| User introduces a new creative mechanism | Explore its consequential possibilities; do not silently freeze the first suggested implementation |
+| Evidence supports a candidate but user choice is reserved | Keep support distinct from selection; seek only the missing choice |
+| Two research workers disagree | Compare evidence/assumptions and synthesize a qualified conclusion, not two pasted reports |
+| A bounded revision closes a real gap | Retain valid work and recheck affected claims; do not count the round itself as failure |
+| Worker reports a consequential external action completed | Check relevant target evidence before declaring it verified; report uncertainty if inaccessible |
 
 These are review cases, not a claim of automated semantic or live-session coverage.

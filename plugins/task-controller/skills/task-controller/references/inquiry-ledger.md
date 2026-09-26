@@ -27,7 +27,9 @@ update. It records how understanding changes, not a user ability profile.
 
 ## Checkpoint And Evidence
 
-`checkpoint` is a complete current snapshot with these fields:
+Use `checkpoint` for the initial complete snapshot. For an existing ledger,
+prefer `patch` with only changed fields. Supply exactly one of the two; CLI uses
+`--checkpoint` or `--patch`. The complete snapshot fields remain:
 
 - `originalIntent`: immutable original concern. Evolving goals belong in
   `understanding` with an explicit reason; do not silently replace the concern.
@@ -50,6 +52,37 @@ status or add a new claim/source ID instead of overwriting identity content.
 Earlier complete snapshots remain in immutable event history. Replays with the
 same ID/content are no-ops; conflicting IDs or stale sequences are rejected.
 Read latest and reconcile instead of blindly retrying a conflicting write.
+
+### Incremental Updates
+
+`patch` accepts `understanding`, `nextAction`, and evidence/hypotheses/questions
+arrays. Arrays merge by ID, not position: omitted entries and empty arrays retain
+prior content. For an existing ID supply only changed fields; a new ID requires
+the full item. Identity text and originalIntent remain immutable; add a new ID
+when changing a claim or correcting a source description. Unknown fields,
+deletions, duplicate patch IDs and invalid evidence references fail atomically.
+Expected sequence, reason, evidenceIds and impact remain required. Example:
+
+```json
+{
+  "understanding": "Candidate A is supported by the sample, but the audience choice remains open.",
+  "hypotheses": [{"id": "h1", "status": "supported", "evidenceIds": ["e2"]}],
+  "evidence": [{"id": "e2", "source": "sample-review", "summary": "Observed result supporting candidate A"}],
+  "nextAction": "Compare audience implications before selecting the direction"
+}
+```
+
+The server builds and validates the snapshot under the same lock as the update.
+An identical patch event replay remains a no-op even after newer updates; changed
+content under that event ID is rejected. Full snapshots and old histories remain
+compatible. This reduces request size, not stored history size.
+
+`supported` describes evidence for a hypothesis, not selection or authority. In
+understanding/nextAction, distinguish candidates, recommendations and decisions;
+cite the source of a material choice (explicit user input or delegated authority).
+Use questions for reserved choices still awaiting input. Do not invent user
+answers or mark a recommendation approved just because a test passed. These are
+controller judgments, not a new approval API or automatic semantic validator.
 
 ## Link To Execution
 

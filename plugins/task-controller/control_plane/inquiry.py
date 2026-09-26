@@ -112,3 +112,50 @@ def compact(ledger):
     event = ledger["events"][-1]
     return {"sequence": ledger["sequence"], "current": ledger["current"],
             "lastChange": {key: event[key] for key in ("eventId", "reason", "evidenceIds", "impact", "contractRevision")}}
+
+
+def advance_patch(ledger, *, patch, **kwargs):
+    """Merge sparse ID-based updates under the caller's state lock.
+
+    Retain full historical checkpoints for compatibility. Replay compares the
+    original patch, not a reapplication to newer state.
+    """
+    if not ledger or not ledger.get("sequence"):
+        raise ValueError("patch requires an existing checkpoint")
+    if not isinstance(patch, dict) or not patch:
+        raise ValueError("patch must be a non-empty object")
+    if set(patch) - {"understanding", "nextAction", "evidence", "hypotheses", "questions"}:
+        raise ValueError("unknown or immutable patch field")
+    request = {key: kwargs[key] for key in ("reason", "evidence_ids", "impact", "impact_target")}
+    request["patch"] = patch
+    for event in ledger["events"]:
+        if event["eventId"] == kwargs["event_id"]:
+            if event.get("patchRequest") != request:
+                raise ValueError("eventId reused with different content")
+            return deepcopy(ledger), True
+    if type(kwargs["expected_sequence"]) is not int or kwargs["expected_sequence"] != ledger["sequence"]:
+        raise ValueError("inquiry sequence conflict; read latest checkpoint")
+    checkpoint = deepcopy(ledger["current"])
+    for field, value in patch.items():
+        if field in {"understanding", "nextAction"}:
+            checkpoint[field] = value
+            continue
+        if not isinstance(value, list):
+            raise ValueError(f"{field} patch must be an array")
+        items = {item["id"]: item for item in checkpoint[field]}
+        seen = set()
+        for entry in value:
+            if not isinstance(entry, dict):
+                raise ValueError("patch entry must be an object")
+            item_id = nonempty(entry.get("id"), "patch id")
+            if item_id in seen:
+                raise ValueError("duplicate patch ID")
+            seen.add(item_id)
+            merged = {**items.get(item_id, {}), **deepcopy(entry), "id": item_id}
+            if item_id in items:
+                checkpoint[field][checkpoint[field].index(items[item_id])] = merged
+            else:
+                checkpoint[field].append(merged)
+    updated, replay = advance(ledger, checkpoint=checkpoint, **kwargs)
+    updated["events"][-1]["patchRequest"] = deepcopy(request)
+    return updated, replay

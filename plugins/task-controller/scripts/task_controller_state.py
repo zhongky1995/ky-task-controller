@@ -24,7 +24,7 @@ if str(PLUGIN_ROOT) not in sys.path:
     sys.path.insert(0, str(PLUGIN_ROOT))
 
 from control_plane.blueprint import compile_blueprint, validate_blueprint
-from control_plane.inquiry import advance as advance_inquiry, compact as compact_inquiry
+from control_plane.inquiry import advance as advance_inquiry, advance_patch as patch_inquiry, compact as compact_inquiry
 from control_plane.capability_router import shadow_route
 from control_plane.decision_governance import (
     AUTHORITIES,
@@ -3606,10 +3606,11 @@ def update_inquiry(args: argparse.Namespace) -> None:
     attached = state.get("stateKind") != "inquiry-only"
     if attached:
         require_continuation_state(state)
-    checkpoint = load_json_value(args.checkpoint)
     try:
-        ledger, replay = advance_inquiry(state.get("inquiry"), event_id=args.event_id,
-            expected_sequence=args.expected_sequence, checkpoint=checkpoint, reason=args.reason,
+        updater = patch_inquiry if args.patch else advance_inquiry
+        payload = {"patch": load_json_value(args.patch)} if args.patch else {"checkpoint": load_json_value(args.checkpoint)}
+        ledger, replay = updater(state.get("inquiry"), event_id=args.event_id,
+            expected_sequence=args.expected_sequence, **payload, reason=args.reason,
             evidence_ids=parse_csv(args.evidence_ids), impact=args.impact, timestamp=now(),
             contract_revision=state.get("contractRevision"),
             impact_target={"requirementIds": parse_csv(args.requirement_ids), "invalidFromLane": args.recommended_invalid_from_lane})
@@ -4583,7 +4584,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--state", required=True)
     p.add_argument("--event-id", required=True)
     p.add_argument("--expected-sequence", required=True, type=int)
-    p.add_argument("--checkpoint", required=True, help="Complete inquiry checkpoint JSON or @path")
+    inquiry_payload = p.add_mutually_exclusive_group(required=True)
+    inquiry_payload.add_argument("--checkpoint", help="Complete inquiry checkpoint JSON or @path")
+    inquiry_payload.add_argument("--patch", help="Sparse update JSON or @path; existing items merge by ID")
     p.add_argument("--reason", required=True)
     p.add_argument("--evidence-ids", required=True)
     p.add_argument("--impact", required=True, choices=["none", "uncertain", "contract_change"])
