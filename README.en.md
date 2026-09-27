@@ -17,6 +17,7 @@ KY-TASK addresses those failure modes with:
 - explicit goals, boundaries, deliverables, and acceptance gates;
 - first-class work orchestration that separates decomposition, parallel/serial planning, per-lane capability matching, and runtime selection;
 - visible native Codex Sessions for distributed work instead of silent Sub Agent fallback;
+- responsibility-based Session reuse: checkpoints and dispatch attempts are not conversations; related serial execution/rework and independent review reuse compatible idle Sessions with fresh attempt identities and current evidence, without a fixed team size;
 - dependency-aware concurrency with no total lane cap, four workers by default, and an explicit per-task ceiling of ten;
 - atomic pre-creation dispatch claims, admission checks at registration, one current attempt per lane, and reconciliation of uncertain creation or still-running superseded workers;
 - artifact-scoped sample/module review and explicit capability bindings, with host-discovery evidence required for unknown runtime availability;

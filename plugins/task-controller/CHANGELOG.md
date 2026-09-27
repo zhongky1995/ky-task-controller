@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.2 — 2026-09-28
+
+- Separate workflow steps, lanes, dispatch attempts and Sessions. Prefer compatible continuing execution/review Sessions over one conversation per checkpoint, correction or delivery action; preserve useful parallelism and independent review without a fixed team size.
+- Narrow mandatory split guidance: routine artifact writes alone do not require distributed execution. Session-first and task-scoped authorization still apply when distribution is selected.
+- Allow serial attempts to reuse a completed runtime without superseding valid prior evidence. Reject concurrent or unconfirmed-stop runtime reuse across revisions and preserve historical writer/reviewer separation.
+- Clarify fresh claim/attempt identities, current-version evidence, host idleness checks and acceptance ownership. No automatic host reuse, cross-state runtime lock or context reset is claimed.
+
 ## 0.8.1 — 2026-09-27
 
 - Refocus controller guidance on user purpose, useful collaboration, evolving understanding and synthesized outcomes across domains; distinguish supported candidates from selected/authorized decisions.

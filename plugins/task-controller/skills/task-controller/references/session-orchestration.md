@@ -29,6 +29,12 @@ Runtime selection is a lifecycle decision, not a complexity badge:
 - The open-source distribution has no standing approval. After explicit task-scoped approval, state records `executionPolicy.nativeThreadUserApproved: true`.
 - Evidence, calculation, implementation, and review do not become persistent merely because they are important.
 
+Use persistent Sessions for continuing responsibilities, including related
+serial delivery/rework and repeated independent checks. Do not equate a lane,
+checkpoint or revised attempt with a new conversation. Before creating one,
+apply the reuse protocol in `dispatch-and-recovery.md`; keep actual parallel
+jobs separate and never use a producer as its own reviewer.
+
 Good worker boundaries:
 
 - A worker can complete its output without needing to write the final artifact.
@@ -92,7 +98,7 @@ If any of these rules is true, KY-TASK must check for real independent worker ru
 
 - The user explicitly asks for split conversations, worker Sessions, subagents, multi-lane execution, or says not to run everything in one thread.
 - A prior run failed because evidence, modeling, product/experience design, implementation, and review were collapsed together.
-- The task writes to external systems or durable artifacts such as Feishu Base, Feishu docs, decks, workbooks, repos, customer-facing files, or production assets.
+- Materially different write/authority boundaries or consequential risk require independent execution and review. A routine authorized artifact edit or mechanical delivery action alone is not a mandatory split trigger.
 - The task has three or more professional layers, such as evidence, object/model, metric/chart, product/experience, implementation, and review.
 - Data correctness and product/user experience are both central to acceptance.
 - Independent review is needed because the output is executive-facing, client-facing, financial, operationally sensitive, or hard to undo.
@@ -293,7 +299,7 @@ When the user explicitly requests real Codex Desktop sidebar tasks, use:
 
 The controller should register each native lane thread with KY-TASK state:
 
-- `workerId`: thread id or stable lane id
+- `workerId`: unique dispatch-attempt ID; use a new ID on reuse, keeping the same `threadId` and `runtimeHandle`
 - `claimId` and the matching `requestId`: the pre-creation reservation
 - `threadId`: required Codex thread id
 - `runtimeHandle`: required and exactly equal to `threadId`; native aliases are not accepted
@@ -311,7 +317,7 @@ Minimum dispatch sequence for mandatory split tasks:
 1. Check `list_projects` plus native thread creation, messaging, listing, and wait tools.
 2. Resolve and lock `targetProjectId`; initialize distributed state only after this succeeds.
 3. Call `task_controller_ready_lanes`.
-4. Atomically claim each ready lane; for `creationAction: create`, create its worker with `target: {type: "project", projectId, environment}`. Claims and live attempts together consume `maxParallelWorkers`.
+4. Atomically claim each ready lane; for `creationAction: create`, first consider a compatible idle Session, otherwise create its worker with `target: {type: "project", projectId, environment}`. The response admits an attempt, not a mandatory new conversation. Claims and live attempts together consume `maxParallelWorkers`.
 5. Verify each new thread reports the locked `projectId`. A mismatched or empty project is a blocker and must not be registered as valid.
 6. Send each worker a narrow prompt and register it with project identity, `claimId`, and `requestId`.
 7. After the admitted batch is dispatched, call host waits with at most eight targets per call. The plugin supplies a grouping plan, not an automatic wait loop; the controller retains cursors and rotates groups.
@@ -404,7 +410,7 @@ After a fix lane and review lane prove the issue is resolved, keep the original 
 
 Before independent review registration, provide `reviewsWorkerIds` covering its compiled `verificationSubjects` and assign a different `runtimeHandle`. Intermediate review consumes named input artifacts, not every earlier writer or future production. Final review covers final writers; legacy states retain earlier-writer scope. Writer completion does not wait for a future review; downstream review and final gates enforce coverage. A fresh prompt on the same runtime is still self-review. Strict semantic acceptance requirements remain in force.
 
-If the user changes contract scope or acceptance, call `task_controller_revise_contract` from the earliest affected lane. Affected lane artifacts and all old callbacks become invalid for progression; dispatch new current-revision workers rather than reusing old callback data.
+If the user changes contract scope or acceptance, call `task_controller_revise_contract` from the earliest affected lane. Affected lane artifacts and old callbacks become invalid for progression; register current-revision attempts and obtain current evidence. Compatible stopped Sessions may be reused; old callback data may not be replayed as a new result.
 
 If a callback or user message contains correction language that changes target, canonical source, preserve rules, allowed/forbidden scope, or acceptance, record `correctionEvents` immediately. Do not translate it into an ordinary note or a pass. Open correction events block further dispatch/gate/completion until one revision consumes all of them; strict revision includes the full replacement contract and starts no later than the earliest recommended lane.
 

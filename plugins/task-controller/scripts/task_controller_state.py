@@ -3133,13 +3133,13 @@ def register_worker(args: argparse.Namespace) -> None:
             fail(f"{runtime} runtimeHandle must equal threadId.")
     if is_independent_runtime and not runtime_handle:
         fail("runtimeHandle is required for independent workers.")
+    # Attempts remain separate audit identities even when a Session is reused.
+    # Include old revisions whose runtime stop is still unconfirmed.
     if runtime_handle and any(
         worker.get("runtimeHandle") == runtime_handle
-        and worker.get("contractRevision") == revision
-        and worker.get("status") in ACTIVE_WORKER_STATUSES
-        for worker in workers
+        for worker in active_workers(state)
     ):
-        fail(f"runtimeHandle already has a current worker identity: {runtime_handle}")
+        fail(f"runtimeHandle already has a running or unconfirmed worker: {runtime_handle}")
     if lane.get("workerRequired") and not is_independent_runtime:
         fail(f"Lane {lane['name']} requires a real independent worker runtime.")
     policy = state["executionPolicy"]
@@ -3274,6 +3274,10 @@ def register_worker(args: argparse.Namespace) -> None:
     if write_boundary == "approved-target" and (not tool_profile or not credential_policy):
         fail("approved-target workers require non-empty toolProfile and credentialPolicy.")
     reviews_worker_ids = parse_csv(args.reviews_worker_ids)
+    if runtime_handle and (lane.get("kind") == "review" or lane.get("writeBoundary") == "review-only"):
+        if any(worker.get("runtimeHandle") == runtime_handle
+               and worker.get("writeBoundary") == "approved-target" for worker in workers):
+            fail("Review worker must use an independent runtime identity; prior writer history cannot be reset by a new attempt.")
     if is_artifact_review_lane(lane):
         writer_workers = review_subject_workers(state, lane["name"])
         known_ids = {worker["workerId"] for worker in writer_workers}
@@ -3414,6 +3418,9 @@ def update_worker(args: argparse.Namespace) -> None:
     if stop_evidence and args.status not in {"superseded", "stale", "resolved"}:
         fail("runtimeStopEvidence is only accepted when retiring a worker.")
     if args.status in {"pending", "running"} and worker.get("status") not in {"pending", "running"}:
+        if worker.get("runtimeHandle") and any(item is not worker and item.get("runtimeHandle") == worker.get("runtimeHandle")
+               for item in active_workers(state)):
+            fail("runtimeHandle already has a running or unconfirmed worker.")
         if find_lane(state, worker["lane"]).get("status") == "done":
             fail("Cannot reactivate a worker for a completed lane; revise the contract first.")
         try:

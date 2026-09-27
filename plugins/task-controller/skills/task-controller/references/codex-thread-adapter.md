@@ -97,8 +97,8 @@ Do not use `thread_tools_unavailable` until tool discovery has been attempted.
 For each native worker lane:
 
 1. Resolve the saved project and choose `local` or project `worktree` environment.
-2. Claim the lane and slot with `task_controller_claim_dispatch` before host creation. Follow `dispatch-and-recovery.md`: only `creationAction: create` permits creation with the locked project target; repeated claims require host reconciliation.
-3. Verify the created thread reports the locked `projectId`.
+2. Claim the lane and slot with `task_controller_claim_dispatch` before host creation or reuse. Follow `dispatch-and-recovery.md`: `creationAction: create` admits a new attempt; prefer a compatible idle Session, otherwise create with the locked project target. Repeated claims require reconciliation.
+3. Verify the selected thread reports the locked `projectId`. For reuse, verify host idleness and responsibility/context compatibility, then register the new attempt before messaging it; do not reuse an in-flight or uncertain runtime.
 4. Send a narrow worker prompt that includes:
    - `controller_thread_id`
    - `reply_to_thread_id`
@@ -107,6 +107,7 @@ For each native worker lane:
    - `to_lane: KY-TASK00-总控-任务伙伴`
    - `callback_mode_expected: active_message_required`
 5. Register the worker with KY-TASK:
+   - `workerId: <unique dispatch-attempt ID>`; this need not equal `threadId`, especially on reuse
    - `claimId: <pre-creation claim id>` and its matching `requestId`
    - `laneRuntime: native_thread_lane`
    - `threadId: <created-or-identified Codex thread id>`

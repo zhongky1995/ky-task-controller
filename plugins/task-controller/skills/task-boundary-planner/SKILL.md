@@ -167,6 +167,7 @@ After the contract is accepted, decide whether execution should stay in the curr
 Keep the main contract lightweight:
 
 - Use single-thread execution for one owner, one artifact, low ambiguity, or a small change surface.
+- Separate process checkpoints from worker Sessions. Keep related execution, corrections and delivery with one continuing owner; reuse a distinct reviewer where needed. A serial dependency or new contract revision does not alone justify a new conversation. Explain additional Sessions by isolation, parallelism or context needs, not the number of steps; do not add a fixed team size or another user approval form.
 - Consider distributed execution when distinct evidence, data, writing, visual, product, implementation, or review lanes would reduce risk or rework.
 - For high-standard composite tasks, do not leave handoff optional: provide an execution lane map, check whether worker tools are available, then recommend distributed execution or justify why the task does not hit mandatory split rules.
 - If the user has already complained that prior execution failed because it did not split, later confirmations such as `继续`, `好`, `进执行`, `按这个做`, or `优化吧` count as approval to continue the split plan. Do not require the user to request workers again in the next turn.
