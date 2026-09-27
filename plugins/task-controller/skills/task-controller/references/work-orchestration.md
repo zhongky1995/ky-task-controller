@@ -166,10 +166,24 @@ pretending those skills were probed by the plugin.
 
 ## Runtime Comes Last
 
+Lane count is not Session count. Keep cohesive production, correction and
+delivery actions in one responsibility unless a real input, authority or
+verification boundary requires another lane. Where separate serial lanes are
+useful for gates, map them to the same compatible continuing Session rather
+than creating a conversation per step. Keep independent verification separate
+from its producers, but reuse that reviewer at later checkpoints. Do not impose
+a fixed team size, add a Session budget approval form, or suppress useful
+parallelism. Explain the concrete benefit of each additional Session.
+
+Place acceptance items on the lane that can actually prove them. A producer
+cannot attest a future independent review, and an intermediate reviewer cannot
+attest a future delivery. A bookkeeping correction needs current-version
+evidence, not a ceremonial new conversation.
+
 After orchestration passes:
 
 - choose `ephemeral + packet_only` for one bounded lane output;
-- choose `persistent + checkpoint_delta` only for a continuing workbench;
+- choose `persistent + checkpoint_delta` for a continuing responsibility, including related serial follow-ups within one project;
 - under `native_session_required`, dispatch every distributed lane as a visible
   project-scoped Session;
 - dispatch the full current wave before waiting;

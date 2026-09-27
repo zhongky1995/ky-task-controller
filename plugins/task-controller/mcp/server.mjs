@@ -839,7 +839,7 @@ const tools = [
   {
     name: "task_controller_claim_dispatch",
     title: "KY-TASK: Reserve Worker Dispatch",
-    description: "Atomically reserve one lane and worker slot BEFORE host task creation. Only creationAction=create permits creation; repeated requests require reconciliation. Unknown capability runtimes require host-discovery evidence. No task is created by this tool.",
+    description: "Atomically reserve one lane and worker slot BEFORE host creation or reuse. creationAction=create admits a new attempt: reuse a compatible idle Session or create only when needed. Repeated requests require reconciliation. Unknown capability runtimes require host-discovery evidence. No task is created or messaged by this tool.",
     inputSchema: {
       type: "object",
       properties: {

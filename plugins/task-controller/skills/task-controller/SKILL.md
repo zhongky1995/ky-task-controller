@@ -40,6 +40,8 @@ Runtime is subordinate to the controller contract:
 - Lifecycle controls context retention; runtime visibility is controlled separately by `runtimeSelectionPolicy`.
 - Use `lane_lifecycle` only when the user explicitly asks to restore managed-subagent behavior for a task.
 
+Steps, lanes, dispatch attempts and Sessions are different objects. Use the smallest useful set of professional responsibilities, not one Session per action or checkpoint. Prefer a continuing `persistent` Session for related execution and correction work, and a separate continuing reviewer where independent review is required. Serial lanes may reuse a compatible idle Session; a new revision requires fresh evidence/attempt identity, not automatically a new conversation. Read `references/dispatch-and-recovery.md` before reuse. A one-turn task may justify isolation, but turn count alone neither requires nor forbids a Session. Before adding one, state the isolation, parallelism or context benefit and why reuse is unsuitable; this is a controller decision, not another user confirmation form.
+
 Parallelism is dependency-driven:
 
 - Every new lane definition must include `dependsOn`.
@@ -144,7 +146,7 @@ Use `distributed` when any mandatory split rule is hit and a real worker runtime
 
 - The user explicitly asks for split conversations, worker Sessions, subagents, multi-lane execution, or says not to run everything in one thread.
 - A prior run failed because evidence, modeling, product design, implementation, and review were collapsed together.
-- The work writes to external systems or final artifacts such as Feishu Base, Feishu docs, decks, workbooks, repos, client-facing files, or production assets.
+- The work has materially different write/authority boundaries or consequential risk requiring independent execution and review. Merely editing a file, updating a document or performing an authorized mechanical delivery action does not by itself require distributed execution.
 - The task requires three or more professional layers, such as evidence intake, object/model design, metric design, product/experience design, implementation, and review.
 - Data correctness and user experience/product path both materially affect acceptance.
 - Independent review is needed because the output is executive-facing, client-facing, financial, operationally sensitive, or hard to undo.
@@ -207,7 +209,7 @@ Read `references/business-delivery-presets.md` for client page decks, evidence-l
    - pass gate
    - `dependsOn`
 7. Call `task_controller_ready_lanes`; atomically claim each selected lane with `task_controller_claim_dispatch` before host creation.
-8. For each `creationAction: create`, create the Session with `target.type: project` and the locked `projectId`. Reconcile repeated/uncertain claims without creating again.
+8. For each newly admitted attempt (`creationAction: create`), first check for a compatible idle Session; create one with `target.type: project` and the locked `projectId` only when reuse is unsuitable. Reconcile repeated/uncertain claims without creating or messaging again blindly.
 9. Verify project affinity, then register the actual thread with its `claimId`, `requestId`, `projectId`, and `projectEnvironment`. Admit the whole available frontier before waiting.
 10. Wait on the batch together; record callbacks and lane checkpoints as workers finish.
 11. Refill freed capacity from the newly ready frontier.
@@ -227,7 +229,7 @@ Possible work types (not a fixed template):
 
 Create only work types required by the actual contract. The controller must state which lanes are independent, why every serial edge exists, where parallel outputs join, which lane owns the result meaning, and which lane may write each final artifact. When no scenario pack matches, use the generic strict orchestration contract instead of defaulting to these five examples.
 
-When distributed execution is approved, the controller must dispatch visible native Codex Session workers. Do not use managed subagents under the installed `native_session_required` policy. Run lanes sequentially only after the user explicitly overrides that policy for the current task.
+When distributed execution is approved, use visible native Codex Session workers, reusing compatible idle Sessions where possible. Do not use managed subagents under the installed `native_session_required` policy. Dependency-driven serial execution in those Sessions is normal; collapsing assigned work into the controller is a different execution mode and needs the appropriate policy override.
 
 Execution lane rule:
 
@@ -374,7 +376,7 @@ When distributed execution is approved, run:
 1. Produce `role_map`.
 2. Call `list_projects`, resolve one saved project, and lock it in `executionPolicy.targetProjectId`.
 3. Initialize KY-TASK state with `task_controller_init`.
-4. Call `task_controller_ready_lanes`; claim each lane before creating its `native_thread_lane`. Only `creationAction: create` permits a new Session; otherwise reconcile the existing request.
+4. Call `task_controller_ready_lanes`; claim each lane before creating or reusing its `native_thread_lane`. `creationAction: create` admits a new attempt, not a requirement for a new sidebar task; otherwise reconcile the existing request.
 5. Verify project affinity and register each lane with its `claimId` and `requestId` using `task_controller_register_worker`.
 6. Require every native worker to callback to `KY-TASK00`.
 7. Record native active messaging as `active_message`, native polling recovery as `controller_poll_recovery`, and managed result collection as `managed_result_collected`.

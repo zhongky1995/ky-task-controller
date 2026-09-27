@@ -54,8 +54,9 @@ class DispatchRecoveryTests(unittest.TestCase):
     def claim(self, name: str, request: str, evidence: dict | None = None) -> dict:
         return self.command("claim-dispatch", "--lane", name, "--request-id", request, "--capability-evidence", json.dumps(evidence or {}))
 
-    def registration_args(self, name: str, worker: str, request: str, claim: dict | None = None, reviews: str = "") -> list[str]:
-        args = ["--worker-id", worker, "--lane", name, "--request-id", request, "--lane-runtime", "native_thread_lane", "--thread-id", "synthetic-thread-" + worker, "--runtime-handle", "synthetic-thread-" + worker, "--project-target-type", "project", "--project-id", "synthetic-project", "--project-environment", "local", "--thread-tool-check", "synthetic native adapter check", "--task", "isolated fixture", "--tool-profile", "synthetic tools", "--credential-policy", "no real credentials"]
+    def registration_args(self, name: str, worker: str, request: str, claim: dict | None = None, reviews: str = "", runtime: str = "") -> list[str]:
+        handle = runtime or "synthetic-thread-" + worker
+        args = ["--worker-id", worker, "--lane", name, "--request-id", request, "--lane-runtime", "native_thread_lane", "--thread-id", handle, "--runtime-handle", handle, "--project-target-type", "project", "--project-id", "synthetic-project", "--project-environment", "local", "--thread-tool-check", "synthetic native adapter check", "--task", "isolated fixture", "--tool-profile", "synthetic tools", "--credential-policy", "no real credentials"]
         if claim:
             args.extend(["--claim-id", claim["claimId"]])
         args.extend(["--controller-thread-id", "synthetic-controller", "--reply-to-thread-id", "synthetic-controller"])
@@ -112,6 +113,87 @@ class DispatchRecoveryTests(unittest.TestCase):
     def test_strict_registration_requires_prior_claim(self) -> None:
         self.init_native()
         self.reject("dispatch_claim_required", "register-worker", *self.registration_args("design", "one", "request-1"))
+
+    def test_serial_attempt_reuses_session_without_rewriting_prior_evidence(self) -> None:
+        self.init_native()
+        claim = self.claim("design", "request-1")
+        self.command("register-worker", *self.registration_args("design", "one", "request-1", claim))
+        self.finish("design", "one")
+        previous = self.command("status")["workers"][0]
+        claim = self.claim("research", "request-2")
+        worker = self.command("register-worker", *self.registration_args("research", "two", "request-2", claim, runtime="synthetic-thread-one"))
+        self.assertEqual("synthetic-thread-one", worker["runtimeHandle"])
+        self.assertEqual(previous, self.command("status")["workers"][0])
+        self.assertEqual(1, self.command("ready-lanes")["activeWorkers"])
+        self.finish("research", "two")
+        self.command("finalize")
+
+    def test_reuse_cannot_double_book_a_running_session_even_with_free_capacity(self) -> None:
+        self.init_native(maximum=2)
+        claim = self.claim("design", "request-1")
+        self.command("register-worker", *self.registration_args("design", "one", "request-1", claim))
+        claim = self.claim("research", "request-2")
+        self.reject("runtimeHandle already has", "register-worker", *self.registration_args("research", "two", "request-2", claim, runtime="synthetic-thread-one"))
+
+    def test_reuse_checks_unconfirmed_stop_across_revisions_and_lanes(self) -> None:
+        self.init_native(maximum=2)
+        claim = self.claim("design", "request-1")
+        self.command("register-worker", *self.registration_args("design", "one", "request-1", claim))
+        self.command("revise-contract", "--invalid-from-lane", "design", "--reason", "approved change")
+        claim = self.claim("research", "request-2")
+        self.reject("runtimeHandle already has", "register-worker", *self.registration_args("research", "two", "request-2", claim, runtime="synthetic-thread-one"))
+        self.command("update-worker", "--worker-id", "one", "--status", "superseded", "--runtime-stop-evidence", "synthetic host confirms idle")
+        self.command("register-worker", *self.registration_args("research", "two", "request-2", claim, runtime="synthetic-thread-one"))
+
+    def test_revision_reuses_session_but_rejects_old_attempt_identity(self) -> None:
+        self.init_native()
+        claim = self.claim("design", "request-1")
+        self.command("register-worker", *self.registration_args("design", "one", "request-1", claim))
+        self.finish("design", "one")
+        self.command("revise-contract", "--invalid-from-lane", "design", "--reason", "approved correction")
+        claim = self.claim("design", "request-2")
+        self.reject("Worker already exists", "register-worker", *self.registration_args("design", "one", "request-2", claim))
+        self.command("register-worker", *self.registration_args("design", "two", "request-2", claim, runtime="synthetic-thread-one"))
+        self.reject("current revision", "record-callback", "--worker-id", "one", "--from-lane", "design", "--artifact", "old-result", "--gate-decision", "pass", "--callback-mode-observed", "active_message")
+        self.finish("design", "two")
+
+    def test_concurrent_reuse_registration_is_atomic(self) -> None:
+        self.init_native(maximum=2)
+        claims = [self.claim(name, "request-" + name) for name in ("design", "research")]
+        jobs = [self.registration_args(name, name, "request-" + name, claim, runtime="synthetic-shared-session")
+                for name, claim in zip(("design", "research"), claims)]
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda args: self.run_command("register-worker", *args), jobs))
+        self.assertEqual(1, sum(result.returncode == 0 for result in results))
+        self.assertIn("runtimeHandle already has", next(result.stderr for result in results if result.returncode))
+
+    def test_old_attempt_cannot_reactivate_after_session_reassignment(self) -> None:
+        self.init_native(maximum=2)
+        claim = self.claim("design", "request-1")
+        self.command("register-worker", *self.registration_args("design", "one", "request-1", claim))
+        self.command("update-worker", "--worker-id", "one", "--status", "superseded", "--runtime-stop-evidence", "synthetic host confirms idle")
+        claim = self.claim("research", "request-2")
+        self.command("register-worker", *self.registration_args("research", "two", "request-2", claim, runtime="synthetic-thread-one"))
+        self.reject("runtimeHandle already has", "update-worker", "--worker-id", "one", "--status", "running")
+
+    def test_historical_writer_cannot_be_relabelled_as_independent_reviewer(self) -> None:
+        definitions = [
+            lane("writer", role="primary", authority="define-and-implement", owner=True, depends=[], capability="writer", outputs=["artifact"], boundary="approved-target", targets=["target"]),
+            lane("review", role="verification", authority="verify", depends=["writer"], capability="reviewer", inputs=["artifact"], boundary="review-only"),
+        ]
+        self.init_native(definitions=definitions, review=True)
+        claim = self.claim("writer", "old-write")
+        self.command("register-worker", *self.registration_args("writer", "old", "old-write", claim))
+        self.finish("writer", "old")
+        self.command("revise-contract", "--invalid-from-lane", "writer", "--reason", "approved content correction")
+        claim = self.claim("writer", "new-write")
+        self.command("register-worker", *self.registration_args("writer", "new", "new-write", claim))
+        self.finish("writer", "new")
+        claim = self.claim("review", "review")
+        self.reject("prior writer history", "register-worker", *self.registration_args("review", "review", "review", claim, reviews="new", runtime="synthetic-thread-old"))
+        self.command("register-worker", *self.registration_args("review", "review", "review", claim, reviews="new"))
+        self.finish("review", "review")
+        self.command("finalize")
 
     def test_unknown_runtime_needs_explicit_host_discovery_evidence(self) -> None:
         state = self.init_native(confirmed=False)
@@ -198,7 +280,10 @@ class DispatchRecoveryTests(unittest.TestCase):
         for name in ("design", "sample", "other-branch", "sample-review", "production", "final-review"):
             reviews = "sample" if name == "sample-review" else "sample,other-branch,production" if name == "final-review" else ""
             claim = self.claim(name, "request-" + name)
-            self.command("register-worker", *self.registration_args(name, name, "request-" + name, claim, reviews))
+            runtime = "synthetic-thread-sample" if name == "production" else "synthetic-thread-sample-review" if name == "final-review" else ""
+            if name == "sample-review":
+                self.reject("independent runtime identity", "register-worker", *self.registration_args(name, name, "request-" + name, claim, reviews, runtime="synthetic-thread-sample"))
+            self.command("register-worker", *self.registration_args(name, name, "request-" + name, claim, reviews, runtime=runtime))
             self.finish(name, name)
         self.assertEqual("finalizable", self.command("ready-lanes")["status"])
         self.command("finalize")

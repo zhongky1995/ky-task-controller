@@ -69,7 +69,7 @@ Use distributed execution if any of these mandatory split rules are hit and work
 
 - The user explicitly asks for split conversations, independent workers, subagents, multi-lane execution, or says not to run everything in one thread.
 - A prior run failed because evidence, model, product/experience, implementation, and review were collapsed together.
-- The task writes to external systems or durable artifacts such as Feishu Base, Feishu docs, decks, workbooks, repos, customer-facing files, or production assets.
+- Materially different write/authority boundaries or consequential risk require independent execution and review. Routine authorized artifact edits and mechanical delivery alone do not mandate a split.
 - The task has three or more professional layers.
 - Data correctness and product/user experience are both central to acceptance.
 - Independent review is needed because the output is executive-facing, client-facing, financial, operationally sensitive, or hard to undo.
@@ -106,17 +106,20 @@ For every worker lane, declare:
 - capability_requirements:
 ```
 
-Use `ephemeral + packet_only` by default. It is appropriate when the lane has a
+Use `ephemeral + packet_only` for a genuinely one-off isolated job. It is appropriate when the lane has a
 bounded input, one output contract, and one callback. Under the Session-first policy
 it still runs in a visible native Session.
 
-Use `persistent + checkpoint_delta` only when the lane must remain an ongoing
+Use `persistent + checkpoint_delta` when the responsibility continues through related serial execution, correction or review, or must remain an ongoing
 professional workbench across controller turns, accept direct user intervention,
 or be resumed independently after a pause.
 
 Do not choose persistence merely because the lane is important, writes a final
 artifact, or needs independent review. State, artifact, and revision continuity
-belong to KY-TASK; conversation persistence is an additional user-facing cost.
+belong to KY-TASK. Compare retained-context cost against repeated setup and
+handoff cost; planned related follow-ups usually favor a continuing Session.
+Steps and checkpoints do not each need a conversation. Follow
+`../../task-controller/references/dispatch-and-recovery.md` for safe reuse.
 
 Declare `depends_on` for every lane. Independent siblings use `[]` or the same
 upstream set and should be dispatched together. Shared-target writes and review
