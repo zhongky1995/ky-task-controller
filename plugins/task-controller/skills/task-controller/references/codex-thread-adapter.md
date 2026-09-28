@@ -23,6 +23,13 @@ Both `ephemeral` and `persistent` distributed lanes use visible native Session t
 
 Native dispatch requires:
 
+First apply `working-agreement.md`: distinguish host permission, callable tools
+and task policy. Record the explicit user request authorizing visible
+conversations/ongoing coordination in existing contract or inquiry evidence.
+A generic execution approval is not that request. Preserve valid scope on
+continuation; missing permission is not a reason to silently spawn a subagent.
+Recheck current model/reasoning policy for both creation and reuse.
+
 - lane `contextPolicy: packet_only | checkpoint_delta` matching its lifecycle;
 - `executionPolicy.nativeThreadUserApproved: true`.
 - `executionPolicy.runtimeSelectionPolicy: native_session_required`.
@@ -118,7 +125,7 @@ For each native worker lane:
    - `callbackExpected: true`
    - `callbackModeExpected: active_message_required`
    - `threadToolCheck: native_threads_available`
-6. Wait for the worker to actively message the callback to `reply_to_thread_id`.
+6. Wait for the worker to actively message the callback to `reply_to_thread_id` only when the user's coordination authorization covers that return message. A controller-written prompt cannot grant user authority. If messaging back is not authorized, resolve the callback policy before dispatch; do not require a prohibited action or mislabel polling as active messaging.
 7. Record callback with `callbackModeObserved: active_message`.
 8. Run `task_controller_gate_check` before the next lane.
 

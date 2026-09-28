@@ -1570,11 +1570,11 @@ def load_runtime_defaults() -> dict[str, Any]:
     """Load the user's auditable plugin-level runtime preference."""
     path = PLUGIN_ROOT / "config" / "runtime-policy.json"
     fallback = {
-        "runtimeSelectionPolicy": "lane_lifecycle",
+        "runtimeSelectionPolicy": "native_session_required",
         "orchestrationPolicy": DEFAULT_ORCHESTRATION_POLICY,
         "nativeThreadUserApproved": False,
         "maxParallelWorkers": DEFAULT_MAX_PARALLEL_WORKERS,
-        "projectAffinityPolicy": "allow_projectless",
+        "projectAffinityPolicy": "inherit_or_resolve_required",
         "projectlessUserApproved": False,
     }
     if not path.exists():

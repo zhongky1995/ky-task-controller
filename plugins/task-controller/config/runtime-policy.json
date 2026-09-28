@@ -10,6 +10,6 @@
     "scope": "KY-TASK distributed worker lanes",
     "source": "No standing approval in the open-source distribution",
     "recordedAt": "",
-    "statement": "Obtain explicit user approval for the current task before creating visible native Codex Session workers. Do not silently substitute managed subagents or projectless Sessions."
+    "statement": "Require an explicit user request for visible worker conversations or ongoing conversation coordination in the current task; generic execution approval is insufficient. Preserve valid scope across turns and obey host restrictions. Do not silently substitute managed subagents or projectless Sessions."
   }
 }

@@ -44,7 +44,7 @@ The system succeeds when it can answer and enforce five questions:
 ```text
 User request and referenced history
 -> Task diagnosis
--> TaskBlueprint confirmation
+-> bounded working agreement (no ceremonial confirmation)
 -> SolutionGraph and capability routing
 -> representative sample / user approval when needed
 -> controlled domain execution
@@ -52,13 +52,15 @@ User request and referenced history
 -> final delivery or scoped correction
 ```
 
-Human involvement is mandatory when:
-
-- the intended audience, final artifact, or business decision remains ambiguous;
-- a representative sample determines the direction of a large production run;
-- an external, destructive, or hard-to-reverse write is requested;
-- authoritative sources conflict at the same priority;
-- a business acceptance case cannot be verified by tools or independent review.
+Human input is required for missing authority, a material reserved preference or
+commitment, or an explicit human gate. Investigate accessible factual ambiguity
+and conflicting sources before asking. Reuse existing scoped write authority;
+ordinary external writes do not create a second approval requirement. Sample
+approval remains mandatory when the contract or scenario policy requires it.
+Unverifiable acceptance must be disclosed, not converted into a passing result
+by asking the user to approve it. The maintained operational decision rules are
+in `skills/task-controller/references/working-agreement.md`; this architecture
+does not add runtime or approval requirements.
 
 ## 3. Non-goals
 

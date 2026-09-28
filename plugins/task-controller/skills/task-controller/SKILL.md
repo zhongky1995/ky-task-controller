@@ -19,6 +19,12 @@ Distinguish observations, candidate explanations, recommendations and decided co
 
 This skill is not a general executor. It coordinates domain tools and skills.
 
+## Preserve The Working Agreement
+
+On continuation, correction, or handoff, restore the current outcome, controller/worker responsibilities, runtime agreement and authority before choosing the next action. A small follow-up does not silently turn an established controller into the implementation owner. Read `references/working-agreement.md` for these transitions and when actual actions disagree with the recorded workflow. Use existing contract, inquiry and worker records; do not create another mandatory form or confirmation phase.
+
+Host instructions take precedence over this plugin's Session preference. Tool availability is not user authorization: visible conversations require an explicit user request for those conversations or an explicitly authorized ongoing conversation-coordination workflow. A generic request to execute, or to use independent workers, does not supply that authorization. Preserve valid task-scoped authorization across turns; if the required runtime is unauthorized or disallowed, report the precise conflict rather than silently using subagents. This plugin cannot intercept host tool calls made outside its protocol.
+
 KY-TASK role model:
 
 - `KY-TASK00-总控-任务伙伴` is the fixed user-facing controller.
@@ -66,7 +72,7 @@ Orchestration is a first-class control stage, not a side effect of lane order:
 ## Use With Task Boundary Planner
 
 - If no task contract exists, first inspect the available evidence needed to make one credible. Do not ask the user to supply a complete contract or approve every research step. If `task-boundary-planner` is relevant, use it to form the bounded execution contract.
-- If a contract already exists and the user says to continue, do not replan. Dispatch the next dependency-ready batch.
+- If a contract already exists and the user says to continue, restore its working agreement and dispatch the next authorized dependency-ready batch. Do not rebuild an unchanged plan; investigate contradictory evidence or a correction before affected dispatch.
 - If the user asks why a previous execution failed, compare the run against the lane gates and write-boundary rules.
 
 ## Continuous Execution And User Decisions
@@ -88,91 +94,19 @@ Internal lane gates default to controller/worker verification, not human approva
 - Any lane that writes external or durable assets, including schema repair, view configuration, document edits, record import, dashboard changes, code edits, or workbook/deck writes, is an execution lane.
 - When an eligible worker runtime is available and split execution is mandatory, execution lanes must use `managed_agent_worker` or `native_thread_lane`; the controller may not run them as `single_thread_section`.
 - In distributed execution, the controller owns understanding, evidence assessment, orchestration, synthesis, callback/gate recording and stop/recovery coordination. It must not take over the assigned implementation worker's external writes; synthesizing the user-facing conclusion is part of its job, not a prohibited implementation shortcut.
-- Review must be separate from implementation.
+- Required independent review must be separate from implementation; ordinary checks do not each require a reviewer lane. Apply the decision rules in `references/working-agreement.md`.
 - Commercial authority must be explicit: `locked`, `agent_may_decide`, or `propose_then_confirm`. Client-facing pricing structure, billable items, budget allocation, KPI binding, scope commitments, and contract terms default to `propose_then_confirm`.
 - A client-facing pricing workbook must use the `client-pricing` scenario graph. Do not start workbook architecture until the evidence-backed commercial model has passed an independent decision review and the user has approved its exact fingerprint.
-- If no real worker runtime is available, record a non-empty downgrade reason before emulating the lanes sequentially in the current thread.
+- A missing worker runtime does not authorize fallback. Apply `references/working-agreement.md`; record an authorized policy change and its reason before changing execution mode.
 - Do not bind to a specific multi-agent plugin unless the user explicitly requests it and callable tools are available.
 - Do not ask the user which workers they want. Propose a role map from the task, materials, risks, tools, write boundaries, and acceptance criteria.
 - A background lane must callback to `KY-TASK00`; a final answer inside the background thread is not enough.
 
-## Split Decision Rule
+## Execution Decision
 
-Before execution, KY-TASK must decide whether the task should run as direct single-thread work, sequential gated lanes, or distributed worker execution.
+Read `references/working-agreement.md` before initial mode selection and on continuation/correction. Its decision rules are the single source for when to use direct work, sequential checkpoints or distributed workers; scenario examples and workflow templates do not override them.
 
-Output a compact split decision when the task is complex, user-facing, tool-writing, or previously failed:
-
-```text
-拆分判断
-- 结论: direct / sequential-lanes / distributed
-- worker runtime check:
-  - checked:
-  - available:
-  - decision:
-- 命中规则:
-- 不拆的代价:
-- 执行模式:
-- lane map:
-- 唯一写入 lane:
-- callback / gate:
-```
-
-### Hard Distributed-Execution Gate
-
-If any mandatory split rule is hit, KY-TASK must check for independent worker runtimes before choosing an execution mode.
-
-If an eligible real worker runtime is available and the user has approved execution, the result must be `distributed`. Do not choose `sequential-lanes` just because it is faster, simpler, or easier to merge. The stored legacy value `multi_session` remains accepted but should not be used for new plans.
-
-For this Session-first policy, check Codex Desktop project/thread tools such as `list_projects`, `create_thread`, `send_message_to_thread`, and `wait_threads` first. Resolve and lock `targetProjectId` before initializing distributed state or creating workers. If the controller already belongs to a saved project, inherit that project. Otherwise match the effective workspace/material path to the deepest saved project path; if there is no unique match, ask the user. If native thread creation or project resolution is unavailable, stop and report the blocker. Do not silently substitute managed subagents or create a `projectless` Session. `lane_lifecycle` and `allow_projectless` are explicit per-task overrides, not automatic fallbacks.
-
-Until this check is recorded in the split decision, KY-TASK must not enter implementation, create Feishu/Base/docs/deck/code artifacts, or claim that execution has started.
-
-`sequential-lanes` is allowed after a mandatory split rule only when one of these is true:
-
-- independent worker runtimes were checked and are unavailable in the current host;
-- the user explicitly rejects background worker execution;
-- the current turn is planning-only and no final artifact will be written;
-- the task is explicitly scoped to a narrow local edit or focused explanation despite earlier context.
-
-When any mandatory split rule is hit and a real worker runtime is available, these responses are invalid:
-
-- `结论: sequential-lanes`
-- `先在当前线程继续做`
-- `不开多线程`
-- `先预检查后直接搭`
-- any plan that performs evidence, modeling, product design, implementation, and review in one uninterrupted current-thread run.
-
-Use `distributed` when any mandatory split rule is hit and a real worker runtime is available:
-
-- The user explicitly asks for split conversations, worker Sessions, subagents, multi-lane execution, or says not to run everything in one thread.
-- A prior run failed because evidence, modeling, product design, implementation, and review were collapsed together.
-- The work has materially different write/authority boundaries or consequential risk requiring independent execution and review. Merely editing a file, updating a document or performing an authorized mechanical delivery action does not by itself require distributed execution.
-- The task requires three or more professional layers, such as evidence intake, object/model design, metric design, product/experience design, implementation, and review.
-- Data correctness and user experience/product path both materially affect acceptance.
-- Independent review is needed because the output is executive-facing, client-facing, financial, operationally sensitive, or hard to undo.
-
-Use `sequential-lanes` only for recommended split cases where real independent workers would add more merge cost than value, or as the explicit fallback described above.
-
-Use `direct` only for small local tasks such as one wording fix, one file edit, one chart label correction, a concept explanation, or a clearly bounded follow-up.
-
-## Anti-Downgrade Rule
-
-If the user has requested distributed execution, split conversations, independent workers, or complained that a prior execution failed because it was not split, KY-TASK must not silently downgrade to single-thread execution.
-
-On later confirmations such as `继续`, `好`, `进执行`, `按这个做`, or `优化吧`, treat the message as approval to continue the already agreed split plan unless the user says not to execute.
-
-If native thread tools are available, dispatch the entire dependency-ready batch as visible Sessions. If they are unavailable, say so explicitly. Under `native_session_required`, do not use a sequential or managed-worker fallback without a fresh user-approved policy override:
-
-```text
-原计划: distributed
-当前限制: thread tools unavailable / not approved / task too small
-降级方式: sequential-lanes
-差异: worker 变成当前线程 checkpoint，不再是真实子对话 callback
-```
-
-If the user explicitly required real separate conversations, stop and ask for the missing thread capability or permission instead of pretending sequential lanes are equivalent.
-
-If a referenced or resumed task matches the mandatory split rules, do not rely on the prior thread's last execution mode. Re-evaluate the split decision under this rule and correct any earlier downgrade before continuing.
+State the chosen responsibility split and its benefit briefly when it changes. Keep detailed admission records internally, not as recurring user forms. Once distributed execution is selected and authorized, use the installed Session-first policy and project affinity; unavailable permissions or tools are a blocker, not automatic permission for a different runtime.
 
 Read `references/controller-protocol.md` when preparing the controller plan or handoff.
 Read `references/lane-contracts.md` when generating lane prompts or checkpoints.
@@ -183,6 +117,10 @@ Read `references/dispatch-and-recovery.md` before creating/replacing a worker, h
 Read `references/business-delivery-presets.md` for client page decks, evidence-led analysis, Feishu Base/dashboard/Wiki delivery, or revision of an existing document.
 
 ## Controller Workflow
+
+This is the distributed execution workflow, after mode and authority have been
+resolved through `references/working-agreement.md`. Direct work does not need
+project discovery or a full lane graph merely to satisfy this template.
 
 1. Confirm the locked contract or produce a compact controller contract.
 2. Resolve project affinity:
@@ -236,7 +174,7 @@ Execution lane rule:
 - `Implementation worker`, `recovery write worker`, `schema repair worker`, `view repair worker`, and any lane with `writeBoundary: approved-target` must use a real independent worker when one is eligible.
 - Use `native_thread_lane` for both ephemeral and persistent distributed lanes. Ephemeral lanes still use `packet_only`; persistent lanes use `checkpoint_delta`.
 - Do not register an external-write lane as `single_thread_section` unless all real worker runtimes were checked and unavailable or the user explicitly rejected background worker execution.
-- If an execution lane is accidentally started inside the controller thread, stop it, checkpoint what changed, and re-dispatch the remaining work to a real worker.
+- If an execution lane is accidentally started inside the controller thread, stop it and checkpoint what changed. Apply the correction recovery in `references/working-agreement.md` before re-dispatch: restoring role separation alone is insufficient if runtime, authority or intended outcome is still wrong.
 - If an old, mistaken, duplicate, or replaced worker should be kept only for audit, mark that worker `status: superseded` instead of `done/pass`. A superseded worker is ignored by gates, but it is not proof that its lane passed. The replacement native worker callback is the only valid pass evidence.
 - If a worker correctly returned `needs-work` or `blocked` and a later repair/review lane proves the issue is fixed, update that worker to `status: resolved` with notes naming the resolving lane/request. A resolved worker is kept as historical evidence but no longer blocks gates.
 

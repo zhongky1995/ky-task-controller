@@ -157,6 +157,24 @@ class DispatchRecoveryTests(unittest.TestCase):
         self.reject("current revision", "record-callback", "--worker-id", "one", "--from-lane", "design", "--artifact", "old-result", "--gate-decision", "pass", "--callback-mode-observed", "active_message")
         self.finish("design", "two")
 
+    def test_correction_preserves_runtime_agreement_before_resuming(self) -> None:
+        initial = self.init_native()
+        claim = self.claim("design", "request-1")
+        self.command("register-worker", *self.registration_args("design", "one", "request-1", claim))
+        self.finish("design", "one")
+        self.command("revise-contract", "--invalid-from-lane", "design", "--reason", "correct related output, retain coordination agreement")
+        resumed = json.loads(self.state.read_text())
+        self.assertEqual(initial["executionPolicy"], resumed["executionPolicy"])
+        claim = self.claim("design", "request-2")
+        args = self.registration_args("design", "two", "request-2", claim)
+        args[args.index("--lane-runtime") + 1] = "managed_agent_worker"
+        before = self.state.read_bytes()
+        rejected = self.run_command("register-worker", *args)
+        self.assertNotEqual(0, rejected.returncode)
+        self.assertEqual(before, self.state.read_bytes())
+        self.command("register-worker", *self.registration_args("design", "two", "request-2", claim, runtime="synthetic-thread-one"))
+        self.finish("design", "two")
+
     def test_concurrent_reuse_registration_is_atomic(self) -> None:
         self.init_native(maximum=2)
         claims = [self.claim(name, "request-" + name) for name in ("design", "research")]

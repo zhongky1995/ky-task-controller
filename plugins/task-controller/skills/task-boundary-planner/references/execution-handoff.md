@@ -7,86 +7,13 @@ Before choosing single-thread or distributed runtime, apply
 the professional jobs; orchestration proves which jobs are parallel or serial.
 Runtime selection is the later placement decision.
 
-## When To Stay Single-Threaded
+## Execution Decision
 
-Stay in the controller thread when:
+Apply `../../task-controller/references/working-agreement.md` for mode selection, continuation and authority. It is the single decision source; this handoff does not add domain-specific split requirements.
 
-- The task has one owner and one final artifact.
-- The change surface is small or local.
-- The next step is wording revision, one chart update, a focused file edit, or a small evidence correction.
-- The main risk is consistency, and independent workers would create merge overhead.
+Pass the selected outcome, ownership, authorized runtime, boundaries and unresolved choices to the controller. An existing agreement survives small follow-ups. Initial planning may recommend workers, but neither the recommendation nor a generic execution approval grants visible-conversation permission.
 
-## When To Recommend Distributed Execution
-
-Consider distributed execution when:
-
-- The task needs distinct professional lanes such as evidence audit, data processing, strategy judgment, draft writing, visual/chart production, or independent review.
-- The task has many source files, several artifacts, disputed metrics, or multiple stakeholder perspectives.
-- A wrong execution path would create expensive rework, customer-facing errors, or repeated misunderstanding.
-- The controller should preserve the task contract while independent workers produce narrow intermediate artifacts.
-
-## Mandatory Decomposition Gate
-
-For high-standard composite tasks, do not proceed from accepted plan to broad execution until execution lanes are named.
-
-Naming lanes is not enough. A new composite map must also declare one semantic
-owner, each lane's contribution role and semantic authority, output/input
-contracts, a reason for every serial dependency, parallel waves, and join points.
-Run `task_controller_plan_orchestration` in strict mode when available.
-
-Must output a lane split, then either recommend distributed execution or provide a written single-thread justification, when any of these are true:
-
-- The task depends on three or more lanes, such as evidence intake, object modeling, metric design, artifact implementation, visual/dashboard design, and independent verification.
-- The task combines source interpretation with external writes, such as updating Feishu docs, Base tables, dashboards, workbooks, or client-facing assets.
-- Data correctness and product/reader experience are both central to success.
-- The user has already experienced repeated rework, misunderstood outputs, or a failed prior execution.
-- Different professional standards are required, such as data lineage, operations design, document writing, and tool/API implementation.
-
-If native Codex Session tools are available and the user confirms execution, first call `list_projects`, resolve one saved project, and split the work into project-scoped visible worker Sessions. Under the installed `native_session_required` and `inherit_or_resolve_required` policies, do not silently emulate the split with managed subagents, sequential lanes, or projectless Sessions when native tools or project resolution are unavailable; report the blocker and request an explicit policy override.
-
-## Split Decision And Anti-Downgrade
-
-When the accepted task contract includes distributed execution, split conversations, independent workers, or the user has complained that prior execution failed because it was not split, later confirmations such as `继续`, `好`, `进执行`, `按这个做`, or `优化吧` must continue the split plan. Do not silently downgrade to ordinary single-thread execution.
-
-Before execution, output a compact split decision:
-
-```text
-拆分判断
-- 结论: direct / sequential-lanes / distributed
-  - worker runtime check:
-  - checked:
-  - available:
-  - decision:
-- 命中规则:
-- 不拆的代价:
-- 执行模式:
-- lane map:
-- 唯一写入 lane:
-- callback / gate:
-```
-
-Use distributed execution if any of these mandatory split rules are hit and worker tools are available:
-
-- The user explicitly asks for split conversations, independent workers, subagents, multi-lane execution, or says not to run everything in one thread.
-- A prior run failed because evidence, model, product/experience, implementation, and review were collapsed together.
-- Materially different write/authority boundaries or consequential risk require independent execution and review. Routine authorized artifact edits and mechanical delivery alone do not mandate a split.
-- The task has three or more professional layers.
-- Data correctness and product/user experience are both central to acceptance.
-- Independent review is needed because the output is executive-facing, client-facing, financial, operationally sensitive, or hard to undo.
-
-Before choosing `sequential-lanes` for a mandatory split task, first check and record whether an independent worker runtime is available. `sequential-lanes` is valid only when runtimes are unavailable, the user rejects background worker execution, or the current response is planning-only and will not write final artifacts.
-
-If a real worker runtime is available and the user has confirmed execution, these outputs are invalid:
-
-- `结论: sequential-lanes`
-- `先在当前线程继续做`
-- `不开多线程`
-- `先预检查后直接搭`
-- any one-pass execution that handles evidence, model, experience, implementation, and review in the same current-thread flow.
-
-If real worker runtimes are unavailable, state the fallback explicitly and keep lane checkpoints separate. If the user explicitly required real separate conversations, stop and ask for the missing native-thread capability or permission instead of treating sequential lanes as equivalent.
-
-For Feishu/Base management demos, operating dashboards, and project process cockpit work, execution after confirmation requires distributed workers whenever eligible worker tools exist.
+For composite work, use the smallest useful responsibility map and compile its dependencies through `work-orchestration.md`; required professional considerations need not each become a lane or Session.
 
 ## Worker Lifecycle Decision
 
@@ -141,7 +68,7 @@ Choose only the lanes needed for the accepted contract:
 - Implementation lane: tool/API operations, schema creation, record import, document updates, scripts, and idempotency.
 - Review lane: source-lineage check, user-path check, old-version contamination check, and final acceptance report.
 
-When a task is a management system, operating dashboard, Feishu/Base demo, or project process cockpit, the product/experience lane and object/model lane must exist before implementation starts.
+For management systems and dashboards, cover the object model and user path before implementation where they affect acceptance. These considerations may belong to one cohesive owner; they do not mandate separate lanes.
 
 These are examples, not a default five-lane template. When no scenario pack
 matches, derive the smallest graph from the actual primary path and its consumed
@@ -182,7 +109,7 @@ Rules:
 - If the user says "continue", "execute", "go ahead", "进执行", "继续", "按这个做", or similar after accepting the plan, perform the next lane instead of answering with another plan.
 - If the user previously said "完成规划后等确认", stopping after planning was correct. A later confirmation is the execution trigger.
 - If the user asks "why was it not completed", explain which phase was completed and which execution trigger or lane gate was missing.
-- Completion means the approved phase is complete. The final artifact is complete only after implementation and review lanes pass.
+- Completion means the requested outcome and its applicable checks pass. A phase checkpoint is not final delivery; a separate review lane is required only when the agreement or risk requires independence.
 
 ## Handoff Brief
 
@@ -217,7 +144,7 @@ Rules:
 - One controller owns the task contract, final artifact integration, user communication, and final verification.
 - Workers receive narrow prompts and must not infer a broader task than assigned.
 - Workers normally produce intermediate artifacts: source ledger, evidence review, section draft, chart data, critique memo, or verification report.
-- Avoid concurrent writes to the same final artifact. If writing is necessary, assign exactly one writer per artifact and one independent reviewer.
+- Avoid concurrent writes to the same final artifact. Assign one writer per artifact and independent review when required by the contract or consequential risk.
 - Give every worker its own lifecycle, runtime preference, dependency list, input set, forbidden actions, expected output, and callback format.
 - Do not let a worker update Feishu/docs/decks/spreadsheets, code, or customer-facing assets unless the handoff explicitly grants that write scope.
 - The controller must reconcile worker outputs against the original contract before final production.
@@ -242,7 +169,11 @@ When recommending distributed execution, include:
 
 ## Sequential Lane Fallback
 
-If the current environment cannot run independent workers, run lanes sequentially in the controller thread:
+If the current environment cannot run independent workers, report the limitation.
+Use sequential controller execution only when the user's agreement and host rules
+permit that fallback; under Session-first policy obtain an explicit override.
+Lack of a runtime alone never cancels a controller-only role. If authorized, keep
+only the needed intermediate checkpoints, for example:
 
 1. Evidence lane output.
 2. Object/model lane output.

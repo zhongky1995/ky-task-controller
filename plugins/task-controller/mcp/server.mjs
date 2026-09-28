@@ -278,7 +278,7 @@ const executionPolicySchema = {
     nativeThreadUserApproved: {
       type: "boolean",
       default: false,
-      description: "Explicit task-scoped user approval for distributed sidebar Session tasks.",
+      description: "Actual explicit user request for visible worker conversations or ongoing conversation coordination in this task, not generic execution approval. Retain its source/scope in contract or inquiry evidence; host restrictions still apply.",
     },
     maxParallelWorkers: {
       type: "integer",
