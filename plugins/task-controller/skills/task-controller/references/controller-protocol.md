@@ -19,44 +19,9 @@ handoff cohesion, and lane-level capability bindings.
 
 ## Execution Modes
 
-### Single-thread lanes
+Mode selection and continuation are defined in `working-agreement.md`, not in this protocol. Use `work-orchestration.md` to compile a selected composite map and `codex-thread-adapter.md` / `dispatch-and-recovery.md` for host execution. A schema's ability to represent a runtime or fallback is not authorization to use it.
 
-Use when worker tools are unavailable, the task is moderate, or consistency matters more than parallelism.
-
-Rules:
-
-- Run one lane at a time.
-- Leave a visible checkpoint after each lane.
-- Do not collapse evidence, model, product, implementation, and review into one long action.
-
-### Distributed workers
-
-Use when distinct lanes can work independently and reduce risk:
-
-- evidence audit
-- object/model design
-- metric/chart design
-- product/experience design
-- implementation
-- independent review
-
-Rules:
-
-- The controller keeps the contract.
-- Workers receive only relevant inputs.
-- Workers normally do not write final artifacts.
-- One writer owns each final artifact.
-- One reviewer checks the final artifact.
-
-Runtime selection:
-
-- Under the default `native_session_required` policy, use `native_thread_lane` for every distributed lane.
-- Under `projectAffinityPolicy: inherit_or_resolve_required`, resolve and lock one saved Codex `targetProjectId` before native dispatch; every worker must report that project id.
-- `ephemeral` lanes keep `contextPolicy: packet_only`; `persistent` lanes use `contextPolicy: checkpoint_delta`.
-- Declare `dependsOn` for every new lane. Total Lane count is uncapped; dispatch the full ready frontier up to `maxParallelWorkers` (default four, explicit task maximum ten).
-- When more than eight Sessions are active, coordinate them through stable wait batches of at most eight targets per host wait call.
-- Both are real independent workers. `single_thread_section` and `thread_create_unavailable` are fallback records, not worker equivalents.
-- If `splitRequirement` is `mandatory` and either real runtime is eligible, `mode` must be `distributed`. `multi_session` remains a legacy alias.
+Keep one writer per target and independent review where the contract or risk requires it. `single_thread_section` is a checkpoint, not an independent worker. Existing mandatory split, project, callback and semantic gates remain enforced; do not weaken them to fit an easier plan.
 
 ## Write Boundary Levels
 

@@ -32,7 +32,9 @@ KY-TASK 是一个面向 Codex Desktop 的复杂任务总控插件。它先做必
 
 公开版不携带作者的个人授权、账号、项目路径或会话记录。
 
-插件默认采用 `native_session_required` 与 `inherit_or_resolve_required`：当用户明确批准分布式执行后，KY-TASK 才能为该任务记录 `nativeThreadUserApproved: true` 并创建项目内 Session。未获批准、无法解析项目或原生 Session 工具不可用时，执行会停止，不会悄悄改用 Sub Agent 或创建项目外会话。
+插件默认采用 `native_session_required` 与 `inherit_or_resolve_required`：用户明确要求创建可见工作会话或授权持续的会话协作后，KY-TASK 才能为该任务记录 `nativeThreadUserApproved: true` 并创建项目内 Session；泛泛的执行批准不等于会话授权。有效授权在原范围内沿用，不逐轮重复询问。宿主限制优先；缺少权限、无法解析项目或原生 Session 工具不可用时，停止相关派单并说明原因，不悄悄改用 Sub Agent 或创建项目外会话。
+
+继续和纠错时先恢复目的、总控/执行者职责与授权，再决定下一步；小修改不会自动取消既有分工。纠错检查相关决策是否一起跑偏，而不只是把眼前动作换个人执行。验收对照实际工具动作与交付证据，不能只看流程登记。插件无法拦截绕过自身流程的调用；[多轮行为验收案例](plugins/task-controller/skills/task-controller/evals/controller-continuity.md) 与自动化状态测试分开报告。
 
 ## 安装
 
@@ -78,6 +80,8 @@ cd ky-task-controller
 这条流程会检查重复收费、收费项独立价值、KPI 因果与可核验性、预算凑数项，以及一级模块是否真的是客户采购类别。
 
 ## 运行模型
+
+执行选择统一由 `working-agreement.md` 定义：先沿用已有分工；新任务按独立执行的实际收益和必要性决定是否拆分，不按领域名称或专业环节数量套固定团队。研究、检查和内部关卡不自动增加用户确认。会话授权、独立审查和商业权限等既有边界仍保留。
 
 ```text
 KY-TASK00 总控

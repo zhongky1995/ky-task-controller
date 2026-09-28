@@ -4,6 +4,12 @@ Use this reference when KY-TASK must split real work across independent workers.
 
 For every distributed Codex Desktop worker Session, also apply `codex-thread-adapter.md`. Worker orchestration defines when and why to split; the adapter defines how to discover and use the host thread tools.
 
+On continuation or correction, first apply `working-agreement.md`. Initial
+small-task routing below does not cancel an existing controller-only role.
+All dispatch and callback instructions require host permission and actual
+user authorization for the specified conversations; tool availability and
+generic execution approval do not grant that authority.
+
 ## Principle
 
 Split by professional work type and write risk, not by convenience.
@@ -50,120 +56,11 @@ Bad worker boundaries:
 - A worker receives the whole conversation when only source files are needed.
 - A worker is allowed to invent missing evidence.
 
-## When To Create Independent Workers
+## Execution Decision
 
-Use independent workers when at least two of these are true:
+Use `working-agreement.md` for mode selection, continuation, authorization and recovery. This reference implements an already chosen distributed workflow; it does not introduce additional split triggers based on domain names, professional-layer counts or past failure alone.
 
-- Evidence volume is high.
-- Object modeling and product experience both matter.
-- Implementation writes to external systems.
-- Independent review is needed.
-- Prior single-thread execution failed.
-- The user explicitly requests split sessions or subagents.
-
-If project discovery or native Session tools are unavailable, stop and report the blocker. Do not silently switch to managed subagents, sequential execution, or projectless Sessions under the installed policies.
-
-Under `native_session_required`, check native project/creation/messaging/wait tools first. Managed agents are checked only for an explicit `lane_lifecycle` override; they are not an automatic fallback. Task creation still requires the user's task-scoped sidebar Session approval.
-
-When Codex thread tools are the intended runtime, record the adapter capability state from `codex-thread-adapter.md` in the split decision and in each worker registration `threadToolCheck`.
-
-## Split Decision Gate
-
-Before execution, KY-TASK must classify the task into one of three modes:
-
-- `direct`: current thread can complete the task without lane overhead.
-- `sequential-lanes`: current thread runs named lanes one by one, leaving checkpoints.
-- `distributed`: visible native Session workers produce lane artifacts and callback to the controller.
-
-Output this compact decision when the task is not trivially small:
-
-```text
-拆分判断
-- 结论: direct / sequential-lanes / distributed
-  - worker runtime check:
-  - checked:
-  - available:
-  - decision:
-- 命中规则:
-- 不拆的代价:
-- 执行模式:
-- lane map:
-- 唯一写入 lane:
-- callback / gate:
-```
-
-### Mandatory split rules
-
-If any of these rules is true, KY-TASK must check for real independent worker runtimes before execution:
-
-- The user explicitly asks for split conversations, worker Sessions, subagents, multi-lane execution, or says not to run everything in one thread.
-- A prior run failed because evidence, modeling, product/experience design, implementation, and review were collapsed together.
-- Materially different write/authority boundaries or consequential risk require independent execution and review. A routine authorized artifact edit or mechanical delivery action alone is not a mandatory split trigger.
-- The task has three or more professional layers, such as evidence, object/model, metric/chart, product/experience, implementation, and review.
-- Data correctness and product/user experience are both central to acceptance.
-- Independent review is needed because the output is executive-facing, client-facing, financial, operationally sensitive, or hard to undo.
-
-When either real worker runtime is eligible and execution is approved, the only valid result for a mandatory split task is `distributed`. `multi_session` remains a legacy stored alias.
-
-`sequential-lanes` is a valid fallback for a mandatory split task only after KY-TASK has checked and recorded that real independent worker runtimes are unavailable, the user rejects background worker execution, or the current turn is planning-only with no final write.
-
-Forbidden downgrade outputs for mandatory split tasks with available thread tools:
-
-- `结论: sequential-lanes`
-- `先在当前线程继续做`
-- `不开多线程`
-- `先预检查后直接搭`
-- a single uninterrupted current-thread run that does evidence, model, product, implementation, and review.
-
-### Recommended split rules
-
-Use `sequential-lanes`, and consider `distributed` if the lanes can work independently, when two or more are true:
-
-- Materials are numerous, mixed, or have disputed evidence status.
-- Several roles or viewpoints must be represented, such as PM, finance, commercial, delivery, management, or customer.
-- Old-version contamination is likely.
-- The work needs rules before tooling, such as a management process or dashboard prototype.
-- The user asks for both a business path and an information path.
-- The output needs both source truth and readable business expression.
-
-### Do-not-split rules
-
-Use `direct` when the task is small and the overhead of lanes would reduce quality:
-
-- one wording or label change
-- one local file edit
-- one chart value or style correction
-- a concept explanation
-- a focused review answer
-- a bounded follow-up where the contract and artifact already exist
-
-Do not create workers just to look rigorous. Split only when it reduces risk, rework, or context overload.
-
-## Anti-Downgrade Rule
-
-KY-TASK must not silently turn an agreed distributed plan into ordinary current-thread execution.
-
-If the user has asked for distributed execution, split conversations, worker threads, or has complained that prior work failed because it was not split, then later confirmations such as `继续`, `好`, `进执行`, `按这个做`, or `优化吧` mean:
-
-- continue the agreed split plan;
-- check thread tools before claiming thread creation is unavailable;
-- dispatch independent workers when runtimes are available and the user has approved execution;
-- register each worker with KY-TASK state;
-- require callback;
-- run `task_controller_gate_check` before implementation and final review.
-
-If no real worker runtime is available, state the fallback explicitly:
-
-```text
-原计划: distributed
-当前限制: thread tools unavailable / not approved / task too small
-降级方式: sequential-lanes
-差异: worker 变成当前线程 checkpoint，不再是真实子对话 callback
-```
-
-If the user explicitly required real separate conversations, stop and ask for the missing thread capability or permission. Do not present sequential lane fallback as if it were distributed execution.
-
-If the task is a Feishu/Base management demo, operating cockpit, dashboard prototype, or business process demo where both the business path and information path must work, treat it as a mandatory split task after execution is approved.
+For a new composite lane map, apply `work-orchestration.md`. For actual Session creation, reuse, project binding and callbacks, apply `codex-thread-adapter.md` and `dispatch-and-recovery.md`. Keep the user's current outcome and runtime agreement unchanged unless evidence or explicit direction requires revision.
 
 ## Controller/Worker Boundary
 
@@ -286,7 +183,7 @@ Before dispatching workers, output:
 - 合并方式:
 ```
 
-After execution is approved, call `task_controller_ready_lanes`, then claim each selected lane with `task_controller_claim_dispatch`. Only `creationAction: create` permits one new sidebar task. Reconcile repeated/uncertain requests without duplicating creation. The task-scoped `nativeThreadUserApproved: true` record covers these KY-TASK distributed Sessions. Read `dispatch-and-recovery.md` for admission and recovery.
+After execution and visible-conversation coordination are authorized, call `task_controller_ready_lanes`, then claim each selected lane with `task_controller_claim_dispatch`. `creationAction: create` admits a fresh attempt, not necessarily a new sidebar task; prefer a compatible idle Session. Reconcile repeated/uncertain requests without duplicating creation. The task-scoped `nativeThreadUserApproved: true` record must reflect actual user-message evidence, not substitute for it. Read `dispatch-and-recovery.md` for admission and recovery.
 
 Before that dispatch, call `list_projects` and resolve exactly one saved project. Prefer the controller thread's non-empty `projectId`. If it is empty, match the effective workspace, source-material path, or durable target to the deepest saved project path. If no unique project can be established, stop and ask the user; do not use `projectless` as a convenience fallback.
 
@@ -368,7 +265,7 @@ If the controller accidentally starts an execution lane in the current thread:
 1. Stop further writes immediately.
 2. Output a checkpoint listing completed writes and remaining writes.
 3. Register the mistake in KY-TASK state.
-4. Create a real worker thread for the remaining execution work.
+4. Restore the complete working agreement using `working-agreement.md`, including runtime authorization and intended outcome, then reuse or create the permitted worker for remaining work. Do not merely swap the controller write for a subagent call or manufacture retroactive dispatch evidence.
 5. Run a review worker before continuing to the next lane.
 
 ### Callback Collection Contract
@@ -493,7 +390,7 @@ callback 格式:
 - next recommendation:
 ```
 
-If the worker is a real thread, it must actively send this callback to the controller thread when thread messaging tools are available. A final answer only in the worker thread is not accepted as normal completion unless the controller is explicitly doing recovery/audit and records `callbackModeObserved: controller_poll_recovery`.
+If the worker is a real thread, it must actively send this callback when messaging is available and the user's coordination authorization covers it. A controller prompt alone cannot authorize a return message. Resolve missing authorization before dispatch; a final answer only in the worker thread is not accepted as active completion. Recovery/audit must record `callbackModeObserved: controller_poll_recovery` honestly.
 
 ## Tool Access And Credential Policy
 
@@ -554,6 +451,6 @@ Before implementation:
 
 Before final answer:
 
-- Review worker or review lane must check acceptance cases.
+- Check applicable acceptance cases; use an independent review worker when required by the contract or risk, as defined in `working-agreement.md`.
 - The controller must state unresolved risks.
 - `task_controller_gate_check` must allow final review/completion.

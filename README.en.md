@@ -32,9 +32,13 @@ KY-TASK addresses those failure modes with:
 
 ## Safe defaults
 
+Execution decisions have one maintained source, `working-agreement.md`: preserve existing ownership first, then split new work for actual isolation, review or parallelism benefits, not domain names or professional-layer counts. Internal research and checks do not introduce ritual user approvals. Existing runtime, commercial and independent-review boundaries remain intact.
+
 The open-source distribution contains no standing user approval, account credentials, local project paths, or conversation history.
 
-Distributed work defaults to `native_session_required` and `inherit_or_resolve_required`. KY-TASK may record `nativeThreadUserApproved: true` only after the user explicitly approves distributed execution for the task. If approval, project resolution, or native Session tools are unavailable, execution blocks instead of silently falling back to managed Sub Agents or projectless Sessions.
+Distributed work defaults to `native_session_required` and `inherit_or_resolve_required`. Set `nativeThreadUserApproved: true` only for an explicit user request for visible worker conversations or ongoing conversation coordination, not generic execution approval. Retain valid task-scoped authority without repeated confirmation. Host restrictions take precedence; missing permission, project resolution or native tools block the affected dispatch rather than silently selecting Sub Agents or projectless Sessions.
+
+Continuation and recovery restore outcome, ownership and authority before the next action. A small follow-up does not dissolve existing controller/worker separation. Recovery checks related decisions, not just the last offending action; acceptance compares actual host activity and artifact evidence with the agreement. The plugin cannot intercept calls outside its protocol. Report [multi-turn behavioral evaluation](plugins/task-controller/skills/task-controller/evals/controller-continuity.md) separately from deterministic state tests.
 
 New plans default to strict orchestration even if fields are missing. Legacy
 state reads remain compatible; importing an old contract requires an explicit

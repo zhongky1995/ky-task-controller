@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Consolidate execution-mode decisions into one working-agreement reference; remove duplicate split checklists and domain-based mandatory team layouts. Preserve existing authority, Session-first execution, independent review and state gates.
+- Distinguish professional considerations from separate workers and direct initial work from continuation under an existing role agreement. Align architecture-level human-input guidance with continuous scoped execution.
+- Add paired behavior checks for both under-control and over-coordination; describe context and usage envelopes without claiming host-level cost enforcement.
+
+- Restore the existing working agreement on continuation, correction and handoff: user outcome, controller/worker ownership, runtime authorization and current dispatch settings. Reuse existing contract/inquiry records, without new mandatory forms or approvals.
+- Recover related decision errors before redispatch; distinguish violating an existing agreement from changing it, and untracked host actions from compliant execution. Compare actual host/artifact evidence with completion claims.
+- Separate explicit visible-conversation authorization from generic execution approval and tool availability; respect host restrictions and preserve valid task-scoped consent without silent subagent fallback.
+- Keep Session/project-safe defaults when runtime-policy configuration is missing or partial. Add state regressions and separate multi-turn behavioral fixtures; no host-level interception or proven live behavioral reliability is claimed.
+
 ## 0.8.2 — 2026-09-28
 
 - Separate workflow steps, lanes, dispatch attempts and Sessions. Prefer compatible continuing execution/review Sessions over one conversation per checkpoint, correction or delivery action; preserve useful parallelism and independent review without a fixed team size.

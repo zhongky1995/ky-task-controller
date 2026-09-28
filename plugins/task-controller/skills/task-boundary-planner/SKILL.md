@@ -156,8 +156,7 @@ Rules:
 - If upstream gates are missing, do not write the final artifact. Produce the missing lane artifact instead and say what must pass before implementation.
 - If the user explicitly approved a full execution package, continue lane by lane, but still preserve intermediate outputs and do not merge review into implementation.
 - Before choosing Sessions or sequential execution for a composite task, compile a strict work orchestration plan. QA/review must depend on the decision, sample, or artifact it judges; high-loss design/production work stays together unless a concrete handoff contract exists.
-- If mandatory distributed-execution rules are hit, first check native Codex Session tools. Under the Session-first policy, hand off the dependency-ready batch to visible Session workers rather than managed subagents or sequential current-thread lanes.
-- Use sequential lanes only after recording that independent worker runtimes are unavailable, the user rejects background worker execution, or the turn is planning-only with no final write.
+- Choose and continue the execution mode through `../task-controller/references/working-agreement.md`, the single decision source. A selected distributed workflow retains Session-first authority and project requirements; no silent runtime fallback.
 - Report meaningful progress without requiring a reply. Do not end execution merely because a lane finished; at handoff state the completed outcome or the concrete blocker/decision and what work it affects.
 
 ## Execution Handoff
@@ -166,7 +165,7 @@ After the contract is accepted, decide whether execution should stay in the curr
 
 Keep the main contract lightweight:
 
-- Use single-thread execution for one owner, one artifact, low ambiguity, or a small change surface.
+- Apply `../task-controller/references/working-agreement.md` before choosing single-thread execution; small scope does not cancel an existing controller-only agreement.
 - Separate process checkpoints from worker Sessions. Keep related execution, corrections and delivery with one continuing owner; reuse a distinct reviewer where needed. A serial dependency or new contract revision does not alone justify a new conversation. Explain additional Sessions by isolation, parallelism or context needs, not the number of steps; do not add a fixed team size or another user approval form.
 - Consider distributed execution when distinct evidence, data, writing, visual, product, implementation, or review lanes would reduce risk or rework.
 - For high-standard composite tasks, do not leave handoff optional: provide an execution lane map, check whether worker tools are available, then recommend distributed execution or justify why the task does not hit mandatory split rules.
