@@ -173,6 +173,16 @@ def _contract_spec(compile_result: Any) -> dict[str, Any]:
     return deepcopy(contract)
 
 
+def _intent_context(blueprint: dict[str, Any]) -> dict[str, Any]:
+    """Carry the whole purpose alongside a node's bounded assignment."""
+    return {
+        "outcome": deepcopy(blueprint["outcome"]),
+        "intentAnchors": _stable_list(_semantic_items(blueprint["intentAnchors"], "intentAnchors")),
+        "audience": deepcopy(blueprint["deliverable"].get("audience")),
+        "useMode": deepcopy(blueprint["deliverable"].get("useMode")),
+    }
+
+
 def _packet_for_node(blueprint: dict[str, Any], contract: dict[str, Any], graph: dict[str, Any], node: dict[str, Any]) -> dict[str, Any]:
     unit_specs = _semantic_items(contract.get("deliverable", {}).get("units", []), "deliverable.units")
     units_by_id = {item["id"]: item for item in unit_specs}
@@ -219,6 +229,7 @@ def _packet_for_node(blueprint: dict[str, Any], contract: dict[str, Any], graph:
         "laneName": node["id"],
         "title": node["title"],
         "purpose": node["purpose"],
+        "intentContext": _intent_context(blueprint),
         "taskType": blueprint["taskType"],
         "interactionMode": blueprint["interactionMode"],
         "capabilityBindings": _stable_list(node["capabilityBindings"]),
@@ -309,6 +320,13 @@ def validate_worker_packet(packet: Any, blueprint: Any | None = None, contract_s
         _fail("inputArtifacts must be an array")
     for field in ("unitSpecs", "sourceSpecs", "decisionSpecs", "acceptanceCases"):
         _semantic_items(result[field], field)
+    # Additive context: old persisted packets remain valid; newly compiled
+    # packets carry the Blueprint's intent without another user-authored form.
+    if "intentContext" in result:
+        context = result["intentContext"]
+        if not isinstance(context, dict) or set(context) != {"outcome", "intentAnchors", "audience", "useMode"}:
+            _fail("intentContext must contain outcome, intentAnchors, audience, useMode")
+        _semantic_items(context["intentAnchors"], "intentContext.intentAnchors")
     if not isinstance(result["outputContract"], dict) or not isinstance(result["outputContract"].get("schema"), dict) or not result["outputContract"]["schema"]:
         _fail("outputContract.schema must be a non-empty object")
     if not isinstance(result["outputContract"].get("artifacts"), list):
@@ -368,6 +386,8 @@ def validate_worker_packet(packet: Any, blueprint: Any | None = None, contract_s
         bp = validate_blueprint(blueprint)
         if result["blueprintDigest"] != _digest(_blueprint_digest_input(bp)):
             _fail("blueprintDigest does not match blueprint")
+        if "intentContext" in result and result["intentContext"] != _intent_context(bp):
+            _fail("intentContext does not match blueprint")
         reference_sets = {
             "unitSpecs": {_id(item, "deliverable.units item") for item in bp["deliverable"].get("units", [])},
             "sourceSpecs": {_id(item, "sources item") for item in bp["sources"]},
@@ -433,10 +453,20 @@ def render_worker_prompt(packet: Any) -> str:
         f"Packet digest: {value['packetDigest']}",
         f"Node: {value['nodeId']} ({value['title']})",
         f"Purpose: {value['purpose']}",
+        "Project intent: " + _canonical(value.get("intentContext", {})),
         f"Task type: {value['taskType']}; interaction mode: {value['interactionMode']}",
         "Dependencies: " + (", ".join(value["dependsOn"]) or "none"),
         "Capabilities: " + (", ".join(binding["capabilityId"] for binding in value["capabilityBindings"]) or "none"),
+        "Input artifacts: " + _canonical(value["inputArtifacts"]),
+        "Assigned units: " + _canonical(value["unitSpecs"]),
+        "Sources: " + _canonical(value["sourceSpecs"]),
+        "Decisions: " + _canonical(value["decisionSpecs"]),
+        "Constraints: " + _canonical(value["constraints"]),
+        "Standards: " + _canonical(value["standards"]),
+        "Acceptance cases: " + _canonical(value["acceptanceCases"]),
         "Output contract: " + _canonical(value["outputContract"]),
+        "Write policy: " + _canonical(value["writePolicySlice"]),
+        "User approval required: " + _canonical(value["userApprovalRequired"]),
         "Callback must return packetDigest=" + value["callbackContract"]["packetDigest"],
     ]
     if value["writePolicySlice"]["writeBoundary"] == "approved-target":

@@ -1,6 +1,6 @@
 interface:
   display_name: "Task Boundary Planner"
   short_description: "Generate reliable task contracts"
-  default_prompt: "Use $task-boundary-planner to generate a task contract before execution. Include final vs phase deliverables, delivery/use mode, object model, evidence status, professional standards, production/tool boundaries, capacity limits, and acceptance criteria. For composite work, separately plan decomposition, orchestration, lane-level capability matching, and runtime: one semantic owner, a primary path, explicit parallel waves, justified serial edges, join points, and handoff-loss decisions. Do not use a fixed five-lane template or execute during the planning response. After I confirm, continue into the next gated execution wave instead of replanning."
+  default_prompt: "使用 $task-boundary-planner，结合当前成果和有效决定，明确本轮承诺、责任、依赖与权限，仅补影响下一步的约定；需要 KY-TASK 编排时遵守其运行契约，按用户已有授权衔接后续工作。"
 policy:
   allow_implicit_invocation: true

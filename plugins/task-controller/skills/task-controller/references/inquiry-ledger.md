@@ -46,6 +46,50 @@ prefer `patch` with only changed fields. Supply exactly one of the two; CLI uses
   an answer and evidence. Do not fabricate an answer to clear a dependency.
 - `nextAction`: next useful action and what it should distinguish or achieve.
 
+### Core gaps and overall completion
+
+For a discovered gap that prevents the promised outcome, add a question with
+`completionImpact: "core"`, initially `status: "open"`. Supply `coreReason` with
+the affected commitment and why the current artifact does not fulfill it;
+link the actual source and artifact evidence. Local improvements remain ordinary
+questions (legacy records default to local). This is a controller record, not a
+user form or an extra approval phase.
+
+Once recorded as core, a question and its coreReason cannot be downgraded,
+deleted or renamed away. Retraction preserves that original core history.
+Close it as `answered` when resolved, or `withdrawn` when the original finding
+was mistaken, with an explanation, new supporting evidence and
+`resolutionRevision` matching the current contract revision. Compare against the
+original reason; merely writing a new evidence ID does not establish that it was
+resolved. A changed commitment still requires the existing authority protocol.
+Evidence may already have been recorded while investigating; freshness is
+relative to this question's opening finding or previous resolution, not the
+latest unrelated checkpoint. Copying the same source and summary under a new ID
+does not supply a new basis.
+Use revision `0` while the record is inquiry-only; resolving an investigation
+does not require starting execution. Adopting an execution contract requires
+revalidation at that contract's revision. Force initialization cannot erase an
+execution state's core history; use normal contract revision instead.
+
+Open core questions and resolutions belonging to an older contract revision
+block overall completion and final artifact-review completion. Production and
+intermediate review may continue. After revision, revalidate the relevant
+resolution against the current contract instead of silently inheriting a pass.
+Reopening a core question invalidates overall finalization. The status response
+exposes these blockers so that ready work is not confused with a finished task.
+
+The runtime checks consistency, evidence linkage and revision, not whether an
+explanation is sufficient. A model can still omit a core finding or submit weak
+evidence to retract it. Behavioral evaluation must inspect those decisions and
+the artifacts; a successful tool call is not semantic validation.
+
+Keep the original concern distinct from a stage's production target. When moving
+to a new state file, carry that concern and link the effective understanding and
+unresolved premises from the previous state; do not reset them to "finish the next
+batch". Preserve source wording or its locator where a paraphrase could lose the
+point. A chosen outline is an interpretation in `understanding`, not new user
+intent. Record why it serves the purpose and what observed result would change it.
+
 Each update also requires `reason`, its supporting `evidenceIds`, and `impact`.
 Record actual evidence, not an assumed agreement. Retain prior item IDs; change
 status or add a new claim/source ID instead of overwriting identity content.

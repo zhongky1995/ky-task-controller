@@ -56,7 +56,7 @@ the user's authority. Concurrency is not a spending limit. Do not claim a hard
 cost cap when the host cannot enforce or measure it; stop for a material budget
 change or exhausted retry envelope instead of escalating models or looping.
 
-Load current agreement, relevant evidence and the next worker's delta first.
+Load the current artifact, effective decisions and their reasons, the agreement, relevant evidence and the next worker's delta first.
 Read historical context only to resolve a specific gap. When a Session's context
 can no longer be maintained reliably, checkpoint decisions and unresolved issues
 before replacement; disclose lost evidence that affects confidence. No fixed

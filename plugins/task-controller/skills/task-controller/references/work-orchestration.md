@@ -54,6 +54,11 @@ Also assign one semantic authority:
 
 Exactly one primary lane is `semanticOwner: true`. Multiple professional lanes
 may contribute, but one lane must resolve conflicts and own the result's meaning.
+If its initial planning work is complete, retain that professional responsibility
+through production joins and correction. A completed lane or approved outline
+does not prove that later artifacts realize the purpose. The controller uses the
+artifact-first judgment in `continuous-execution.md` before adopting the result;
+this does not require a new owner lane or Session for each checkpoint.
 
 ## Parallel Eligibility
 

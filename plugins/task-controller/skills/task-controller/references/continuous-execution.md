@@ -98,42 +98,20 @@ The runtime still invalidates an ordered suffix and requires new state for certa
 topology changes. This guidance does not implement dependency-local migration or
 automatically stop host workers. Preserve stop evidence and capacity accounting.
 
-## Synthesize For The Intended Use
+## Judge the evolving result
 
-The controller integrates contributions into an answer, judgment, proposal or
-usable artifact appropriate to the request. Resolve or disclose conflicts and
-missing connections; multiple passing lane reports are not themselves a coherent
-result. A useful explanation can be a complete outcome without implementation.
+The controller must read or use the current integrated artifact at the points where substantive choices are made. Use the actual content, relationships and interaction to judge whether it serves the intended audience and purpose. Source correctness, reconstructable answers and working controls can be necessary without establishing clarity, depth or usability. Do not substitute report counts or a pile of successful callbacks for this judgment.
 
-Match consequential claims to evidence: distinguish what a worker reported,
-what has been checked, and what remains conditional. Check relevant source,
-artifact, readback or user-path evidence according to the domain and risk; do not
-add a universal software-style release pipeline or recheck every minor output.
-User acceptance supports preference/authority, not factual or technical truth.
-State limitations where they affect use; do not bury them beneath test counts.
+Have the responsible professional develop a concrete direction and the reasons behind it. A useful reference or representative part can expose a weak premise before expansion; choose it for the uncertainty it resolves, not because all tasks need a sample. AI should do the professional work before asking the user for the choices only they can make. Existing sample gates and reserved approvals remain binding.
 
-Keep internal coordination detail out of the main delivery unless it helps the
-user act. The user should receive the usable result and its important boundaries,
-not be asked to reconcile worker drafts, versions or competing conclusions.
+Feedback is evidence to interpret. Locate its cause in the actual work before selecting edits: the premise, structure, relation, mechanism, interaction or wording may need to change. Correct affected related parts and preserve valid decisions and accepted quality. Avoid turning every complaint into more content, warnings, roles or tests. When evidence supports the current choice, explain it rather than automatically replacing it.
 
-## Behavioral Review Cases
+Separate useful work, demonstrated improvement, and fulfillment of the current commitment. A gap is core when leaving it unresolved prevents the promised understanding, behavior or outcome, even if the artifact remains usable. Record such a finding when discovered; do not wait for a final pass decision to decide whether it matters. Ordinary local improvements need not block the whole task.
 
-Check decisions, not exact wording, when evaluating this protocol:
+On revision, revisit each unresolved core finding against its original reason and the current integrated artifact. Keep valid improvements, but identify the specific evidence that now fulfills the affected commitment. Evidence elsewhere can resolve a gap; unrelated progress cannot compensate for it. If the original finding was mistaken, explicitly retract it with evidence addressing that reason. Merely renaming it local, calling the work usable, changing the contract revision, or planning to deepen it after delivery does not resolve it. A real change to the user's commitment follows the existing authority and revision rules; do not manufacture that change from the current draft.
 
-| Situation | Expected behavior |
-| --- | --- |
-| User requests an update with clear boundaries | Inspect, make a bounded plan, execute and verify; no extra plan-approval round |
-| User says to research only and wait | Inspect and recommend; no production or worker creation |
-| Three independent evidence checks complete | Controller evaluates them and continues; no three user confirmations |
-| Sample passes tests but an undelegated direction choice remains | Present concrete alternatives/recommendation and wait only on dependent production |
-| Required commercial approval has no current fingerprint approval | Keep the gate blocked; overall execution approval is insufficient |
-| New evidence contradicts an accepted premise without keywords | Assess impact and revise affected work if confirmed; do not silently continue |
-| User asks why something is wrong but says not to change it | Diagnose; do not infer implementation authority from correction words |
-| Missing source affects one branch only | Investigate or ask for that source; continue independent authorized work |
-| User introduces a new creative mechanism | Explore its consequential possibilities; do not silently freeze the first suggested implementation |
-| Evidence supports a candidate but user choice is reserved | Keep support distinct from selection; seek only the missing choice |
-| Two research workers disagree | Compare evidence/assumptions and synthesize a qualified conclusion, not two pasted reports |
-| A bounded revision closes a real gap | Retain valid work and recheck affected claims; do not count the round itself as failure |
-| Worker reports a consequential external action completed | Check relevant target evidence before declaring it verified; report uncertainty if inaccessible |
+Keep decisive reasons beside the effective design or source, and resume from the current artifact and decisions. Historical logs answer specific gaps; they should not override the current task. The existing inquiry/contract records can link these sources without duplicating them. Material contract changes still use the correction/revision protocol.
 
-These are review cases, not a claim of automated semantic or live-session coverage.
+Integrate worker contributions before delivery and resolve missing connections. The primary professional owns the substance, and the controller owns synthesis and overall fitness while respecting assigned write boundaries. A separate reviewer assists; it does not inherit all responsibility for quality. Inspect consequential claims through appropriate evidence and preserve necessary independent checks without repeating unaffected verification.
+
+If the crucial part remains poor despite sufficient inputs, change the support: better evidence, suitable expertise/capability or an explicitly revised commitment. Do not expand production or repeat review merely to obtain a pass. The user receives the usable result, meaningful reasons and relevant limits, not an unresolved collection of worker drafts.
