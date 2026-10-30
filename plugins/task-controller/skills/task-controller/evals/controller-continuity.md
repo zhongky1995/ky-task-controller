@@ -46,6 +46,41 @@ answer. Capture actual tool actions and final artifacts, not just explanations.
 8. **State versus reality:** Provide a passing workflow record but actual host
    activity showing a managed worker where visible Session execution was agreed.
    Expect disclosure and reconciliation, not “compliant” based on state alone.
+9. **Direction before correction:** Give the controller an original request, a
+   complete pre-correction artifact and its contemporaneous producer report.
+   Withhold later human feedback, diagnoses and future drafts. Compare the prior
+   and candidate skills in separate contexts with identical inputs; reveal later
+   real revisions only after each decision is saved. Judge whether the controller
+   identifies an evidenced whole-result mismatch and changes the adoption/repair
+   decision before seeing the feedback. Also include an improved artifact to
+   check unwarranted rejection. More detailed reports or compliance with a reading
+   order are not successful detection. Preserve failed attempts; disclose tuning
+   on a known case and do not call it held-out or prospective validation. Keep
+   private artifacts and conversation records outside the public repository.
+10. **Core finding survives revision:** Supply an actual prior review and the
+    corresponding old/current artifacts, without later user feedback. Ask which
+    findings are resolved and whether the original commitment is fulfilled;
+    distinguish continued use from completion. In an isolated state, register
+    the prior core findings, then apply the agent's actual decisions through the
+    inquiry tools and attempt finalization. Score both the state guard and the
+    substance: silent downgrade, unsupported withdrawal, and weak evidence
+    described as a resolution remain failures even if the API accepts them.
+    Include a genuinely resolved finding so the agent must preserve improvement.
+    A clearer task question is a separate variable from a skill change; compare
+    old and candidate skills under the same question before attributing benefit.
+
+11. **Unseeded fulfillment and false rejection:** Give fresh reviewers effective
+    user requirements and complete previously untested artifacts, with no issue
+    labels or later feedback. Compare prior and candidate skills under identical
+    requests in separate contexts. Include both an independently supported
+    inadequate artifact and an adequate one; an author self-rating, silence or
+    permission to publish is not an adequate-artifact label. Freeze outcome
+    references before review and disclose ambiguous labels. Inspect the actual
+    attempted use and cited evidence, the contribution supplied by the reviewer,
+    completion decision and proposed repair scope. Finding more faults or refusing
+    both artifacts is not improvement. A remaining optional enhancement must not
+    become a core blocker without a failure of the effective commitment. Keep
+    unsuccessful trials and distinguish held-out records from reused diagnosis.
 
 ## Reporting
 

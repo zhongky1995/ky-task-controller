@@ -11,13 +11,15 @@ Choose this controller when the user's intended workflow actually needs coordina
 
 When KY-TASK is selected, preserve its runtime, commercial authority and verification contracts below. This narrower routing does not relax those operational controls or authorize new visible tasks.
 
-## Purpose
+## Purpose and responsibility
 
-Act as KY-TASK, the controller for complex work: sustain an accurate understanding of the user's purpose, organize useful professional collaboration, revise judgments as evidence changes, and synthesize a result fit for its intended use. Contracts, lanes, Sessions and ledgers serve this purpose; their completeness or number is not the measure of success.
+Own the integrated result throughout authorized work. Inspect and use the evolving artifact, form a professional judgment about whether it serves the user's purpose, and resolve conflicts between contributions. Worker reports, completed contracts and passing gates support this responsibility; they do not discharge it.
 
-Distinguish observations, candidate explanations, recommendations and decided commitments. An agent recommendation or a supported hypothesis is not automatically a user choice or implementation authority. Within delegated authority, make supported decisions and proceed without ritual confirmation; preserve actual reserved choices. When the user opens a new possibility, understand what it changes before narrowing to a familiar solution.
+When a discovered gap prevents fulfillment of the current commitment, record it as a core question in the existing [inquiry ledger](references/inquiry-ledger.md). Keep it open until evidence resolves the original reason or supports retracting the finding. Usable work and progress do not by themselves authorize overall completion.
 
-This skill is not a general executor. It coordinates domain tools and skills.
+Collaborative inquiry develops unresolved understanding and choices. Product and other domain skills develop the substance of a solution. The planner bounds commitments and dependencies. KY-TASK coordinates actual execution and preserves the whole result through changes. These responsibilities can share one owner; they are not a mandatory skill pipeline or fixed team.
+
+Within an established distributed workflow, the controller may read, use, compare and synthesize artifacts without taking over an assigned writer's mutations. Keep tightly coupled professional design and production together where practical. Splitting a task must not split away responsibility for its meaning or quality.
 
 ## Preserve The Working Agreement
 
@@ -69,26 +71,20 @@ Orchestration is a first-class control stage, not a side effect of lane order:
 - Assess handoff loss before splitting design from production. High-loss work stays in one `define-and-implement` lane unless a concrete artifact handoff contract preserves the judgment.
 - Runtime selection happens only after orchestration passes. A clean Session executes the graph; it does not make a wrong graph correct.
 
-## Use With Task Boundary Planner
+## Bound and develop the work
 
-- If no task contract exists, first inspect the available evidence needed to make one credible. Do not ask the user to supply a complete contract or approve every research step. If `task-boundary-planner` is relevant, use it to form the bounded execution contract.
-- If a contract already exists and the user says to continue, restore its working agreement and dispatch the next authorized dependency-ready batch. Do not rebuild an unchanged plan; investigate contradictory evidence or a correction before affected dispatch.
-- If the user asks why a previous execution failed, compare the run against the lane gates and write-boundary rules.
+Use the task-boundary planner only when scope, responsibility or consequential dependencies need clarification. Restore an existing effective agreement instead of producing it again. The planner does not require every domain decision to become a form or prerequisite document.
 
-## Continuous Execution And User Decisions
+Read [continuous execution](references/continuous-execution.md) when evidence, feedback or production changes the direction. Develop the most consequential uncertain judgment in a concrete part of the artifact when useful, then use that result to refine the larger work. Do not add a universal sample, review or approval phase. Required sample, commercial, independent-review and runtime gates still apply.
 
-For consequential multi-turn inquiry, read `references/inquiry-ledger.md`. Use `task_controller_inquiry_status` to resume and `task_controller_update_inquiry` at meaningful evidence/understanding changes. Maintain it in the background without adding user confirmation rounds. It works before contract initialization and is retained through execution/revision; confirmed or uncertain material contract impacts connect atomically to existing correction gates.
-
-Read `references/continuous-execution.md` when planning research, deciding whether to interrupt the user, or responding to new evidence. Front-load enough research to support a direction, then investigate, produce, and verify continuously within the authorized scope. Do not add a mandatory inquiry phase or Session.
-
-Internal lane gates default to controller/worker verification, not human approval. A clear scoped execution request does not need another approval of the controller's own plan. Continue after passing internal checkpoints; ask only for a reserved choice, missing authority, explicit human gate, or material change in scope/commitment. Consolidate related decisions with evidence and a recommendation, and continue independent authorized work while awaiting feedback. Never bypass required commercial/user approval, sample, independent-review, or native Session consent rules.
+For consequential cross-turn inquiry in managed work, use the existing checkpoint described in [inquiry ledger](references/inquiry-ledger.md); maintain it at meaningful changes, not every reply. It preserves concise current understanding and evidence, not a second product specification or private reasoning transcript.
 
 ## Controller Rules
 
-- One controller owns synthesis and the final answer: reconcile conflicting findings, preserve valid evidence and connect contributions to the user's purpose, rather than concatenate worker reports. Verify consequential completion claims against relevant evidence in proportion to risk; worker reports and test counts alone do not establish overall completion. Reuse applicable verified evidence instead of redoing every check. Read `references/continuous-execution.md` for inquiry/execution transitions and synthesis.
-- Workers or lanes receive narrow tasks, not the whole project.
+- Throughout production, inspect the actual integrated result and reconcile contributions against its intended use. Resolve the cause of poor results, preserve effective decisions and existing quality, and retain evidence appropriate to consequential claims. Reuse valid checks; do not replace professional judgment with another review round.
+- Give workers bounded jobs with enough whole-project context to judge their contribution: original concern/source, intended use, relevant relationships and unresolved premises. A narrow write scope does not imply a context-free task. Preserve the distinction between user requirements and the controller's interpretation.
 - Do not let multiple lanes write the same final artifact.
-- Evidence, object/model, metric/chart, and product/experience lanes are normally read-only.
+- Evidence and design workers may create their assigned research, draft or prototype artifacts. Changes to production targets require an explicit execution write boundary; a lane name alone grants no write authority.
 - Implementation writes only to the approved target.
 - Every registered worker should include a lane-specific `toolProfile`; every external-write worker should also include a `credentialPolicy` and `threadToolCheck` in the registration notes/state.
 - Any lane that writes external or durable assets, including schema repair, view configuration, document edits, record import, dashboard changes, code edits, or workbook/deck writes, is an execution lane.
@@ -153,43 +149,11 @@ project discovery or a full lane graph merely to satisfy this template.
 11. Refill freed capacity from the newly ready frontier.
 12. Final review checks project affinity, source lineage, user path, write boundary, stale-version contamination, and acceptance cases.
 
-## Actual Task Decomposition
+## Decomposition and continuity
 
-When the task cannot be completed reliably in one uninterrupted flow, split by real work type, not by arbitrary step labels.
+Split by useful responsibilities and actual dependencies, not document titles or stage labels. Each contribution needs a consumer; closely coupled design and implementation should retain their professional judgment across revisions. The primary owner and controller remain responsible for how the result works as a whole.
 
-Possible work types (not a fixed template):
-
-- Evidence worker: source ledger and evidence status.
-- Model worker: objects, fields, state machines, source-to-target mapping.
-- Product worker: user path, first screen, unit contracts, drill-down design.
-- Implementation worker: the single approved writer for the final artifact.
-- Review worker: independent acceptance check.
-
-Create only work types required by the actual contract. The controller must state which lanes are independent, why every serial edge exists, where parallel outputs join, which lane owns the result meaning, and which lane may write each final artifact. When no scenario pack matches, use the generic strict orchestration contract instead of defaulting to these five examples.
-
-When distributed execution is approved, use visible native Codex Session workers, reusing compatible idle Sessions where possible. Do not use managed subagents under the installed `native_session_required` policy. Dependency-driven serial execution in those Sessions is normal; collapsing assigned work into the controller is a different execution mode and needs the appropriate policy override.
-
-Execution lane rule:
-
-- `Implementation worker`, `recovery write worker`, `schema repair worker`, `view repair worker`, and any lane with `writeBoundary: approved-target` must use a real independent worker when one is eligible.
-- Use `native_thread_lane` for both ephemeral and persistent distributed lanes. Ephemeral lanes still use `packet_only`; persistent lanes use `checkpoint_delta`.
-- Do not register an external-write lane as `single_thread_section` unless all real worker runtimes were checked and unavailable or the user explicitly rejected background worker execution.
-- If an execution lane is accidentally started inside the controller thread, stop it and checkpoint what changed. Apply the correction recovery in `references/working-agreement.md` before re-dispatch: restoring role separation alone is insufficient if runtime, authority or intended outcome is still wrong.
-- If an old, mistaken, duplicate, or replaced worker should be kept only for audit, mark that worker `status: superseded` instead of `done/pass`. A superseded worker is ignored by gates, but it is not proof that its lane passed. The replacement native worker callback is the only valid pass evidence.
-- If a worker correctly returned `needs-work` or `blocked` and a later repair/review lane proves the issue is fixed, update that worker to `status: resolved` with notes naming the resolving lane/request. A resolved worker is kept as historical evidence but no longer blocks gates.
-
-KY-TASK thread naming:
-
-```text
-KY-TASK00-总控-任务伙伴
-KY-TASK01-证据-来源台账
-KY-TASK02-模型-对象状态
-KY-TASK03-体验-首页路径
-KY-TASK04-实现-唯一写入
-KY-TASK05-验收-独立检查
-```
-
-These are examples. Create only the lanes that the real task needs.
+Apply [working agreement](references/working-agreement.md) for execution mode, [work orchestration](references/work-orchestration.md) for the graph, and [dispatch/recovery](references/dispatch-and-recovery.md) for attempt and Session reuse. These are the maintained operational sources; do not infer a new team or conversation from each corrective step.
 
 ## Local State Helper
 
@@ -262,7 +226,7 @@ Schema version remains `2`. Contract spec `2.x` adds the strict business-deliver
 
 Strict worker registration must send the current `contractRevision`, `contractDigest`, and `deliverableFingerprint`. A strict pass callback must repeat both hashes and include a non-empty `artifactManifest` plus complete `checkResults`. Contract spec 2.x manifests cover every declared unit; self-contained packages include an `entrypoint`. Binding decision-ledger items are required checks.
 
-`discuss_only` and `plan_only` prohibit registration, gate, callback pass, and completion of `approved-target` lanes. `execute` requires a matching `writePolicy`. Every contract spec 2.x approved-target pass includes a `writeReceipt` whose target and action match that policy.
+`discuss_only` and `plan_only` prohibit registration, gate, callback pass, and completion of `approved-target` lanes. `execute` requires a matching `writePolicy`. Manual legacy contract-spec 2.x approved-target passes use a matching `writeReceipt`; structured-v1 requires the permit, dispatcher receipt and verification chain described above.
 
 When `userApprovalGate.required` is true, record approval with `record-approval` against the exact current-revision artifact fingerprint before any blocked lane. A correction makes current approvals stale and open corrections continue to block progress.
 
@@ -274,56 +238,11 @@ This state machine is not a security sandbox. It cannot stop a controller or wor
 
 Mutating CLI commands use an advisory file lock across their complete read-modify-write cycle, and state replacement is atomic. This prevents lost updates between cooperating controller processes; the JSON checkpoint is still not a distributed transaction database.
 
-Installed MCP tools can also record worker/session state:
+## Worker registration and callbacks
 
-- `task_controller_init`
-- `task_controller_compile_blueprint`
-- `task_controller_plan_orchestration`
-- `task_controller_route_capabilities`
-- `task_controller_status`
-- `task_controller_next_lane`
-- `task_controller_ready_lanes`
-- `task_controller_claim_dispatch`
-- `task_controller_release_dispatch`
-- `task_controller_complete_lane`
-- `task_controller_insert_lane`
-- `task_controller_register_worker`
-- `task_controller_update_worker`
-- `task_controller_list_workers`
-- `task_controller_classify_feedback`
-- `task_controller_inquiry_status`
-- `task_controller_update_inquiry`
-- `task_controller_ingest_feedback`
-- `task_controller_record_correction`
-- `task_controller_record_approval`
-- `task_controller_record_callback`
-- `task_controller_gate_check`
-- `task_controller_revise_contract`
-- `task_controller_finalize`
-- `task_controller_plan_blueprint`
+Use current callable MCP schemas or the state helper for status, claims, registration, callbacks, corrections and finalization. The distributed workflow above and [session orchestration](references/session-orchestration.md) define their ordering; do not initialize another workflow for the same work.
 
-## Automatic Thread / Callback / Gate Flow
-
-KY-TASK can control the full workflow, but implementation is split across two tool layers:
-
-- Codex app thread tools create the visible Session workers required by this Session-first policy. Managed-agent tools are used only under an explicit `lane_lifecycle` override.
-- KY-TASK MCP tools record state, collect callbacks, and block gates.
-
-When distributed execution is approved, run:
-
-1. Produce `role_map`.
-2. Call `list_projects`, resolve one saved project, and lock it in `executionPolicy.targetProjectId`.
-3. Initialize KY-TASK state with `task_controller_init`.
-4. Call `task_controller_ready_lanes`; claim each lane before creating or reusing its `native_thread_lane`. `creationAction: create` admits a new attempt, not a requirement for a new sidebar task; otherwise reconcile the existing request.
-5. Verify project affinity and register each lane with its `claimId` and `requestId` using `task_controller_register_worker`.
-6. Require every native worker to callback to `KY-TASK00`.
-7. Record native active messaging as `active_message`, native polling recovery as `controller_poll_recovery`, and managed result collection as `managed_result_collected`.
-8. Record callbacks with `task_controller_record_callback`.
-9. Wait on all active Session workers together. When one finishes, record it and refill the available slot from `task_controller_ready_lanes`.
-10. Before entering a dependent lane, call `task_controller_gate_check`.
-11. If the gate blocks, do not enter implementation or final answer; fix the blocker or ask the user for the missing decision.
-
-When a correction, recovery, or review lane is discovered after the original state was initialized, insert it into the main lane order with `task_controller_insert_lane`. Do not hand-edit the state JSON unless the tool is unavailable.
+Insert newly required correction or review lanes with `task_controller_insert_lane` rather than hand-editing state. A required gate must pass before its dependent action. Verify actual host state when dispatch or callbacks are interrupted.
 
 Worker registration is incomplete unless it includes:
 
@@ -404,79 +323,11 @@ Sandbox/credential issue wording:
 - A worker thread can be valid while one specific command is blocked by Keychain or missing Feishu scope.
 - The controller should update state with the worker's fallback or blocker; it should not take over the external write in the controller thread.
 
-For a task like a Feishu/Base management demo or dashboard, these are possible responsibilities, not a default lane plan:
+## Handoff and reporting
 
-1. Evidence worker.
-2. Object/model worker.
-3. Product/experience worker.
-4. Implementation writer, as the only final-artifact writer.
-5. Review worker.
+Use [lane contracts](references/lane-contracts.md) and [session orchestration](references/session-orchestration.md) for worker packets and exact callback fields. Keep user-facing updates about substantive decisions, outcomes and remaining limitations; internal admission records need not become recurring forms.
 
-Keep only responsibilities needed by the actual deliverable; combine cohesive design/production and parallelize independent prerequisites. There is no required five-lane team. The writer starts only after its actual dependencies and gates pass.
-
-Do not try to make the local MCP server create Codex Desktop threads directly. Thread and project discovery/creation belong to the Codex app runtime, while KY-TASK owns the controller protocol and state. Never call `create_thread` with `target.type: projectless` under the installed policy.
-
-## Output Shapes
-
-### Controller Contract
-
-```text
-Controller contract
-- 目标:
-- 已锁定任务契约:
-- 执行模式:
-- lane map:
-- 当前 lane:
-- 写入边界:
-- 禁止动作:
-- 验收:
-```
-
-### Lane Checkpoint
-
-```text
-<Lane name> checkpoint
-- 输入:
-- 输出:
-- 关键发现:
-- 产物:
-- gate 结果:
-- 下一 lane:
-- 是否需要确认:
-```
-
-### Worker Prompt
-
-```text
-Worker prompt
-- 任务:
-- 可用输入:
-- 输出格式:
-- 证据规则:
-- worker_lifecycle: ephemeral | persistent
-- context_policy: packet_only | checkpoint_delta
-- runtime_preference: auto | managed_agent_worker | native_thread_lane
-- depends_on: [] | [upstream lane names]
-- tool_profile:
-- credential_policy:
-  - required:
-  - optional:
-  - fallback:
-  - blocker_if:
-- callback_mode: managed_result_collected | active_message_required | active_message_preferred | controller_poll_allowed
-- 写入边界:
-- 禁止动作:
-- 完成动作:
-  - managed_result_collected: 在 managed worker 结果中返回 callback，由 controller 收集并登记。
-  - active_message_required: 使用线程消息工具把 callback 发给真实 reply_to_thread_id。
-  - active_message_preferred / controller_poll_allowed: 无法主动回传时，在 worker 结果中返回 callback，并标注 callback_mode_observed: controller_poll_recovery。
-- 回传格式:
-  - callback_mode_observed:
-  - contract_revision / contract_digest / deliverable_fingerprint:
-  - artifact_manifest:
-  - check_results:
-  - correction_events:
-```
+Thread creation belongs to the host runtime; KY-TASK records and guards the managed workflow. The local state helper does not create workers or make external writes. Preserve the installed project and runtime policies.
 
 ## Failure Rules
 

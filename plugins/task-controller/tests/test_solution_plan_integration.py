@@ -129,6 +129,10 @@ class SolutionPlanIntegrationTests(unittest.TestCase):
         ))
         self.assertEqual(packet["packetId"], worker["packetId"])
         self.assertTrue(worker["prompt"])
+        prompt_sections = dict(line.split(": ", 1) for line in worker["prompt"].splitlines() if ": " in line)
+        self.assertEqual(blueprint()["outcome"], json.loads(prompt_sections["Project intent"])["outcome"])
+        self.assertEqual(packet["sourceSpecs"], json.loads(prompt_sections["Sources"]))
+        self.assertEqual(packet["constraints"], json.loads(prompt_sections["Constraints"]))
         self.command(
             "record-callback", "--state", str(self.state), "--worker-id", "strategy-worker", "--from-lane", "strategy",
             "--packet-id", packet["packetId"], "--packet-digest", packet["packetDigest"],
@@ -142,6 +146,7 @@ class SolutionPlanIntegrationTests(unittest.TestCase):
             "--task-blueprint", json.dumps(revised_blueprint),
         ))["state"]
         self.assertNotEqual(packet["packetDigest"], revised["workerPackets"]["strategy"]["packetDigest"])
+        self.assertEqual(revised_blueprint["outcome"], revised["workerPackets"]["strategy"]["intentContext"]["outcome"])
         self.assertEqual("superseded", revised["workers"][0]["status"])
         changed = blueprint("evidence-analysis", "workbook")
         result = self.command(

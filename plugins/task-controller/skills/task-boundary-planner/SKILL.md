@@ -1,505 +1,56 @@
 ---
 name: task-boundary-planner
-description: 为需要明确目标、范围、依赖、验收或阶段交接的复杂项目形成任务约定；支持用户要求的任务定界与已约定的 KY-TASK 规划。普通问答、局部修改、开放讨论和常规分析不因涉及“优化、方案、代码、文案”就需要任务契约。
+description: 为需要明确范围、责任、依赖或阶段交接的项目形成可继续工作的任务约定；支持用户要求的任务定界与已有 KY-TASK 规划。开放探究、普通分析和局部修改不自动建立契约。
 ---
 
-# Task Boundary Planner
-
-## Intent and proportionality
+# 任务定界
 
-Understand what the user is trying to understand, decide, or accomplish in the current context before selecting an artifact or workflow. Read their proposed cause or solution as a hypothesis unless confirmed. Carry forward valid context and corrections; a new sentence does not by itself reset the task.
+负责明确当前承诺和协作边界，让已有构思能够继续制作。专业设计由相应领域能力承担，总控负责执行编排与整体结果；本技能不重复开展问题探究、产品设计或独立验收，也不要求各职责分别创建会话。
 
-Use the contract and protocol only to resolve consequential scope or coordination needs. A simple task may need only a sentence of working understanding, with direct execution where authorized. An inquiry can legitimately end with understanding rather than a production plan. The schema is a completeness aid for relevant decisions, not a requirement to invent artifacts, roles or questions.
+## 约定服务当前工作
 
-## Purpose
+先看用户目的、现有材料与成品，沿用已确认选择。只把会影响范围、责任、依赖、权限或交付判断的事项形成约定，复用已有记录。任务复杂不等于所有前提必须一次想清；允许在制作中取得证据并修正做法。
 
-Convert an ambiguous request into a reliable current-version task contract. Do not try to make requirements perfect. Define what can be done now, what professional standards apply, what evidence is required, what is out of scope, and what would justify reopening the boundary.
+专业构思应当解释结果怎样服务使用者，以及关键选择为什么成立。定界承接这些判断，不用功能清单、表格齐全或固定步骤代替它们。只有当前约定确实不足以支持下一动作时才补缺口，避免为已明确的工作重建契约。
 
-Core principle: allow unknowns, but do not allow an unbounded task. A contract bounds authorized work; it does not freeze every explanation or turn an agent's proposed solution into the user's intent. Keep candidate directions distinct from selected decisions and note the evidence or delegated authority for material selections. An inquiry may end with a useful understanding rather than a production plan.
+## 确定当前承诺
 
-## Outcome
+根据任务说明当前要取得的结果、谁在什么情境下使用、本轮范围与必须保留的内容、依赖及重要未决项、相应授权和如何判断结果。可写成短段落或融入已有方案，不要求固定契约字段、对象表、单元表、指标表各交一份。
 
-For complex tasks, inspect enough available evidence to form a compact `任务契约 v0` before substantial execution. Relevant read-only discovery does not require a complete contract. When invoked as a planning step, stop at the contract and execution/handoff plan. A clear scoped execution request already authorizes work within that scope; do not require a second ceremonial approval of the plan you just derived. Preserve explicit planning-only limits, reserved decisions, and separate runtime/write permissions. After execution is authorized, advance through the dependency-ready lanes instead of replanning from scratch or asking at every checkpoint.
+整体目标与当前工作应有明确联系。阶段性产物用于解决某个具体判断或形成可继续使用的结果，不能因为已经列出计划就把完整任务标为完成。用户只要求形成理解时，解释与依据可以是最终成果，不强制规划制作。
 
-Read `../task-controller/references/continuous-execution.md` when deciding research depth, confirmation points, or how to continue complex work. Internal decomposition must not become repeated user approval work.
+事实、用户决定、建议与待验证假设分别处理。来源存在不等于内容可公开，教学设定、历史草稿和已发生结果也不能混用；把必要限定放在受影响内容旁，不要求通用证据分层表。
 
-When inquiry spans meaningful turns or handoffs, read `../task-controller/references/inquiry-ledger.md` and maintain the current understanding, evidence, hypotheses, questions, and next action using the inquiry tools. A new inquiry-only state does not require a complete execution contract; normal init later adopts its history. Do not require users to fill this record or approve each update.
+能自己查明的事实先查，专业做法先提出有依据的建议。缺失且影响当前取舍、又无法从已有材料解决的问题才询问；继续不依赖答案的已授权工作，不设固定问题数量。
 
-## Operating Rules
+## 让专业判断进入制作安排
 
-- Lead with your own professional diagnosis; do not turn clarification into a questionnaire.
-- Ask at most 2 questions in the first pass, only for blocking unknowns that change direction, risk, or acceptance.
-- Classify unknowns as blocking, assumable, or observable.
-- Decide whether the request is a single task or a composite task chain.
-- For a composite task, keep decomposition, orchestration, capability matching, and runtime selection as four separate decisions. Do not derive parallel/serial order from the lane list.
-- Treat explicit `$task-boundary-planner` invocation as planning-only by default: do not modify final artifacts, update external documents, generate polished deliverables, launch background sessions, or perform broad execution in the same response.
-- Treat a later user message such as "继续", "进执行", "按这个执行", "优化吧", or "开始做" after a locked contract as an execution trigger unless the same message says not to execute.
-- On execution-trigger turns, do not repeat the full contract. Identify the next lane, restate its write boundary, execute only that lane or the approved execution phase, leave an intermediate artifact/checkpoint, and state whether the final deliverable is complete.
-- Identify the intended outcome first. When its final form is uncertain, investigate the consequential unknowns before promising a final artifact or complete lane graph.
-- If the user asks to "think first" or "do not execute yet", still separate the final deliverable from the current phase deliverable.
-- Identify the professional lens and minimum reliable standard. Do not stop at generic labels like "high standard".
-- For high-standard composite tasks, define the object model before execution: metrics, business lines, units, artifacts, actors, charts, modules, or scenes.
-- Identify capacity drivers and one-pass limits. Do not stop at generic labels like "high capacity".
-- Lock the current task version once a workable contract exists.
-- After locking, prefer local corrections over boundary resets.
-- Execution starts within an explicit scoped execution request, user confirmation after a planning-only contract, or a previously agreed workflow that grants execution. A controller-generated checkpoint is not a new authorization boundary.
-- Reopen the contract only when a defined change trigger fires.
+根据实际交付需要，识别最影响质量的判断与支持条件。依赖专业资料、真实数据、平台能力或合适工具的，先取得足以支持该判断的依据，其余查证可随制作进行。避免把调研、校准、制作、验收固化为每项任务必经的阶段。
 
-## Stable Protocol
+当关键方向尚无把握，选择有助于判断的具体内容、设计或尝试，放回整体目的解释。它可以由 AI 自行检查并继续扩大，不默认要求用户批准样章或先制作全部单元契约。扩大时继承有效判断，保留其他部分的实质差异。
 
-After bounded initial discovery, use this sequence to organize complex tasks internally. It is not a sequence of user confirmation rounds:
+数字、状态、图表或跨系统关系需要稳定含义时，把定义放在实际数据、规格或制作源中，让后续使用同一依据。高风险或争议口径要核实；精确内容使用能保持其准确性的制作方式。领域能力提供专业做法，定界只保留影响承诺与协作的部分。
 
-1. Deliverable: define the final artifact, audience, use context, and decision/action it supports.
-2. Delivery mode: decide how the artifact will be consumed or operated; set mode-specific constraints.
-3. Professional lens: identify the main domain standard and required secondary standards.
-4. Composite chain: if the task has multiple layers, map evidence -> judgment -> production -> verification.
-5. Minimum reliable standard: define the few professional checks that must pass in this run.
-6. Evidence and capacity: define the first evidence packet, artifact graph, concrete capacity drivers, and one-pass envelope.
-7. Task contract: output `任务契约 v0`, including assumptions and non-goals.
-8. Unit contract: if the final deliverable has pages, sections, modules, scenes, scripts, charts, or files, define the per-unit gate before production.
-9. Production path: choose the build method and tool boundary; name what must be deterministic, what can be generative, and what needs human-visible review.
-10. Work orchestration: identify one semantic owner, primary/prerequisite/supporting/verification roles, parallel waves, justified serial edges, join points, and handoff-loss decisions.
-11. Execution trigger and handoff: match capabilities per lane, then define what user confirmation, tool permission, lifecycle, runtime, or lane handoff is required before production starts.
-12. Verification: check final-deliverable acceptance, delivery-mode fit, upstream layer standards, unit gates, production-path risks, and capacity limits.
-13. Change control: decide whether new information is a local correction, evidence supplement, expression adjustment, delivery-mode correction, tool-path correction, or contract change.
+领域资料按需读 [专业视角](references/domain-lenses.md)；案例材料用 [案例与白皮书](references/case-whitepaper-materials.md)，运营界面用 [管理系统设计参考](references/ops-dashboard-prototype.md)，仓库接手用 [仓库风险探查](references/repo-risk-scan.md)。这些参考供专业判断，不自动触发其中每张表、每个角色或额外交付；已采用的机器契约要求仍须履行。
 
-If the contract already exists and the user has just confirmed execution, start at step 10 and dispatch the next dependency-ready lane batch. Do not go back to step 1 unless a change trigger fires.
+## 范围、能力与分工
 
-Use `references/task-types.md` only as an auxiliary intent map when the user's request is unclear. It helps infer whether the user is asking for truth, clarity, judgment, expression, execution, communication, learning, or revision. It does not override the final deliverable standard in the task contract.
+范围取决于依赖关系、材料规模、专业能力与后果。优先保持一段有意义的工作连贯完成，分批或分工应解决具体容量、隔离或并行需要。高标准本身不要求更多角色；若关键部分在充分材料下仍不能可靠完成，补专业支持或调整相应承诺，不以扩大产量掩盖判断不足。按需读 [容量与支持条件](references/capacity-boundary.md)。
 
-## Task Contract Schema
+已有分工沿用有效责任与权限。新分工按 [工作约定](../task-controller/references/working-agreement.md) 选择，由持续负责成果的人保留整体判断；紧密耦合的构思与制作尽量由同一承担者完成。交接只带当前成果、关键选择及理由、依赖和实际边界，参考 [执行交接](references/execution-handoff.md)。
 
-Return this structure, keeping it short:
+只有采用 KY-TASK 多 lane 编排时，才按 [work-orchestration](../task-controller/references/work-orchestration.md) 编译严格计划，明确 semanticOwner、输入输出、实际依赖与合并位置，再选择能力和 runtime。机器字段由工具契约要求，不扩展成所有任务的用户表单。选用场景包前确认与实际任务及授权相符，不选不合适的包再绕过其门禁。
 
-```text
-任务契约 v0
-- 最终交付物:
-- 当前阶段交付物:
-- 使用对象/场景:
-- 交付场景:
-- 主专业标准:
-- 副专业标准:
-- 复合任务链路:
-- 最低可靠标准:
-- 证据链:
-- 证据分层:
-- 生产路径:
-- 容量边界:
-- 不做什么:
-- 关键假设:
-- 阻塞问题:
-- 第一阶段计划:
-- 执行触发:
-- 分工/交接建议:
-- 验收方式:
-- 变更触发:
-```
+## 授权与继续
 
-For small tasks, use a brief working understanding only if it helps. For complex tasks, include contract fields that change decisions, coordination or acceptance; do not fill irrelevant fields for completeness.
+用户明确只规划时停在所需方案与依据；相称的只读探查可服务规划。用户已明确要求实施或已有有效执行授权时继续相关工作，调用本技能不撤销授权，也不要求批准由 AI 自己拟出的内部计划。
 
-## Final vs Phase Deliverable
+初步建议、模型意见或分工图不授权创建可见会话、对外写入或扩大承诺。既有任务范围内的有效授权跨轮沿用；具体运行、商业决策、发布和付费权限按实际约定。内部步骤完成不是再次询问“是否继续”的理由。
 
-Do not confuse the artifact needed in the current reply with the true final deliverable.
+## 随新证据修正约定
 
-- Final deliverable: the artifact that ultimately satisfies the user's real task, such as an updated Feishu document, deck, report, code change, contract redline, data workbook, script package, or production-ready asset.
-- Current phase deliverable: the bounded artifact produced now, such as a task contract, source ledger, metric dictionary, outline, first batch, sample page, dry-run, test slice, or review memo.
+反馈先回到具体成果定位原因。措辞、实现或表达可在当前范围内修正；涉及前提、目标、职责或权限变化时，只更新受到影响的约定及依赖工作。保留仍成立的设计和成果，不把每次反馈变成重规划或单独审批。
 
-If execution is intentionally paused, still name the final deliverable and explain how the current phase deliverable gates progress toward it.
+KY-TASK 状态已启用时，确认实质契约影响后调用 `task_controller_record_correction`，带证据、影响 requirement 与 `recommendedInvalidFromLane`，再用 `task_controller_revise_contract` 消费全部开放事件。关键词仅帮助发现线索，不能代替语义判断；修正用户已明确的决定不要求再次确认。具体见 [持续执行](../task-controller/references/continuous-execution.md)。
 
-## Execution Stop Rule
-
-When this skill is explicitly named, cited, or requested as a planning step, the current response is planning-only by default.
-
-Allowed in planning-only mode:
-
-- Read the skill instructions and relevant references.
-- Inspect a small read-only evidence packet when needed to make the contract credible.
-- Output the task contract, object model, source/evidence ledger, unit contract, metric/chart matrix, production path, risk list, execution plan, or handoff brief.
-
-Not allowed in planning-only mode:
-
-- Create, overwrite, or upload final deliverables.
-- Update Feishu/Google/Office documents, decks, spreadsheets, code, or customer-facing files.
-- Generate final charts, final images, final PDFs, or final packages.
-- Launch background sessions, background threads, automations, or external write operations.
-- Run broad or irreversible processing beyond the stated first evidence packet.
-
-Execution may start only when one of these is true:
-
-- The current request explicitly includes execution within clear scope, rather than planning only; a named planning skill does not negate that explicit instruction.
-- The user replies after the contract with explicit approval to execute the plan.
-- A previously accepted workflow contract already grants a defined execution phase.
-
-A review or diagnosis request should receive the requested findings and evidence. If the same request also authorizes fixes, continue with those fixes. Stop at planning only when the user limited the work to planning or a real dependency prevents execution.
-
-## Post-Contract Execution Mode
-
-Use this mode when a task contract has already been produced and the user now approves execution.
-
-Before taking action, run a compact readiness check:
-
-```text
-执行就绪检查
-- 已锁定契约:
-- 本轮执行 lane:
-- 输入:
-- 输出:
-- 写入边界:
-- 禁止动作:
-- 完成后是否继续下一 lane:
-```
-
-Rules:
-
-- If the next lane is evidence, object/model, metric/chart, or product/experience, prefer read-only outputs, record and verify its checkpoint, and continue within the authorized scope. Stop only for a real unresolved dependency, reserved decision, or explicit user-requested checkpoint.
-- If the next lane writes to Feishu/Base/docs/decks/workbooks/code or customer-facing artifacts, verify that all upstream lane gates required by the contract exist.
-- If upstream gates are missing, do not write the final artifact. Produce the missing lane artifact instead and say what must pass before implementation.
-- If the user explicitly approved a full execution package, continue lane by lane, but still preserve intermediate outputs and do not merge review into implementation.
-- Before choosing Sessions or sequential execution for a composite task, compile a strict work orchestration plan. QA/review must depend on the decision, sample, or artifact it judges; high-loss design/production work stays together unless a concrete handoff contract exists.
-- Choose and continue the execution mode through `../task-controller/references/working-agreement.md`, the single decision source. A selected distributed workflow retains Session-first authority and project requirements; no silent runtime fallback.
-- Report meaningful progress without requiring a reply. Do not end execution merely because a lane finished; at handoff state the completed outcome or the concrete blocker/decision and what work it affects.
-
-## Execution Handoff
-
-After the contract is accepted, decide whether execution should stay in the current thread or be handed off.
-
-Keep the main contract lightweight:
-
-- Apply `../task-controller/references/working-agreement.md` before choosing single-thread execution; small scope does not cancel an existing controller-only agreement.
-- Separate process checkpoints from worker Sessions. Keep related execution, corrections and delivery with one continuing owner; reuse a distinct reviewer where needed. A serial dependency or new contract revision does not alone justify a new conversation. Explain additional Sessions by isolation, parallelism or context needs, not the number of steps; do not add a fixed team size or another user approval form.
-- Consider distributed execution when distinct evidence, data, writing, visual, product, implementation, or review lanes would reduce risk or rework.
-- For high-standard composite tasks, do not leave handoff optional: provide an execution lane map, check whether worker tools are available, then recommend distributed execution or justify why the task does not hit mandatory split rules.
-- If the user has already complained that prior execution failed because it did not split, later confirmations such as `继续`, `好`, `进执行`, `按这个做`, or `优化吧` count as approval to continue the split plan. Do not require the user to request workers again in the next turn.
-- Do not dispatch workers or open sidebar-visible tasks during planning-only mode.
-- Distributed execution proceeds only after the user confirms execution. The open-source distribution has no standing approval; list the planned Sessions, obtain task-scoped approval, and record it before dispatch.
-- Read `../task-controller/references/work-orchestration.md` before producing any new composite lane map. If KY-TASK tools are active, call `task_controller_plan_orchestration` and clear every strict blocker before runtime selection.
-- Read `references/execution-handoff.md` when recommending distributed execution, separate Codex threads, background workers, or detailed handoff prompts.
-
-## Professional Lens Routing
-
-Use professional lenses to define standards, not to add ceremony.
-
-Common lenses:
-
-- Data / spreadsheet / research analysis.
-- Business / operating review / management reporting.
-- Code / repository / system implementation.
-- Deck / client-facing narrative / visual communication.
-- Case / whitepaper / public-facing material supply.
-- Script / screenplay / creative content.
-- Contract / policy / legal-risk review.
-- Marketing / KOC / content strategy.
-- Operations / project execution / stakeholder coordination.
-
-For high-standard tasks, state:
-
-- Object model: entities, fields, files, metrics, pages, actors, or systems.
-- Correctness criteria: what a professional would check first.
-- Failure modes: what mistakes commonly create wrong results.
-- Evidence chain: sources, scripts, formulas, samples, tests, or references.
-- Acceptance checks: what must match across outputs before handoff.
-
-If no listed lens fits, generate a provisional lens:
-
-```text
-专业判断形成
-- 最终交付物要求的主标准:
-- 依赖的副专业能力:
-- 该领域最容易错的 3-5 件事:
-- 本轮最低可靠标准:
-- 第一轮证据/参考:
-```
-
-Read `references/domain-lenses.md` for data, code, deck/story, contract/policy, marketing/KOC, or operations planning. Read `references/case-whitepaper-materials.md` for case studies, whitepaper source packages, public-facing case supply drafts, or evidence-heavy case material curation. Read `references/ops-dashboard-prototype.md` for project management systems, Feishu/Base demos, operating dashboards, PM update flows, or management cockpit prototypes.
-
-## Object Model Gate
-
-Use an object model gate when professional correctness depends on stable categories.
-
-State the task's core objects before planning execution. Examples:
-
-- Data/reporting: metrics, source files, fields, filters, business lines, projects, time periods, charts, and output sections.
-- Deck/document: sections, pages, claims, evidence assets, audiences, decisions, and required actions.
-- Script/creative: audience, channel, speaker, scenes/beats, claims, brand facts, forbidden claims, and production constraints.
-- Code/system: modules, APIs, schemas, state, callers, tests, and generated artifacts.
-
-If the object model is missing or vague, do not proceed to polished production. Produce the object model as the current phase deliverable or make the first phase an evidence scan.
-
-## Evidence Status Gate
-
-Use an evidence status gate when the task depends on mixed materials, past projects, case files, drafts, templates, sales decks, screenshots, tables, or user-provided background.
-
-Before polished production, classify important materials and claims:
-
-```text
-证据分层
-- 可作为事实:
-- 可作为结果数据:
-- 可作为方法论启发:
-- 仅后台参考:
-- 禁用/不得进入正文:
-- 需要用户确认:
-```
-
-Rules:
-
-- Background context is not automatically final-output wording.
-- Source presence is not permission to include it.
-- Drafts, templates, sales materials, and unclosed proposals are not proof of delivered work.
-- Internal source files can support judgment without appearing in the final artifact.
-- If a claim is only inspired by a source, label it as method abstraction, not case fact.
-
-If the task is public-facing, client-facing, or executive-facing, do not proceed from "material collection" to "final writing" until the evidence status gate exists.
-
-## Composite Task Routing
-
-Treat a task as composite when the final output depends on multiple professional layers, such as data analysis -> business judgment -> client-facing deck, repo discovery -> implementation -> test report, or contract review -> negotiation memo.
-
-For composite tasks:
-
-- Main acceptance criteria come from the final deliverable and its audience.
-- Prerequisite acceptance criteria come from upstream evidence layers.
-- Do not let an upstream layer dominate the task if it is only evidence for the final deliverable.
-- Do not skip an upstream layer if the final deliverable would become unsupported without it.
-- Build the primary semantic path first. Add prerequisite/supporting work only when its output is consumed by that path.
-- Mark exactly one primary lane as semantic owner. A clean worker Session cannot repair missing or conflicting ownership.
-- Independent lanes share a wave only when neither consumes the other, neither verifies the other's future output, and they have a declared downstream join point.
-
-Every phase must name:
-
-- Input.
-- Output.
-- Professional standard.
-- Gate to proceed.
-- Final-deliverable dependency.
-- Contribution role and semantic authority.
-- Output contract, downstream consumer, and dependency reason.
-
-## Delivery Mode Gate
-
-Use a delivery mode gate when the output will be read, watched, presented, operated, edited, packaged, or handed off.
-
-State the primary mode:
-
-- Live presentation or projection: speaker-led, screen-first, one screen one idea.
-- Self-read document or web page: reader-led, scan-friendly, denser explanation allowed.
-- External share package: portable, clean file structure, no QA leftovers, clear entry file.
-- Working tool or interactive page: operator-led, task flow, controls, states, and error handling matter.
-- Internal handoff or editable draft: reviewer-led, traceability and editability matter.
-
-Then state:
-
-- Consumption environment: projector, meeting room, desktop, mobile, print, async reading, or runtime.
-- Primary interaction: speaker-led, reader-led, operator-led, reviewer-led, or automated.
-- Format consequences: page density, navigation, visual hierarchy, asset packaging, responsiveness, editability, or runtime behavior.
-- Mode-specific acceptance check: screenshot, preview, print, package listing, smoke test, or handoff checklist.
-
-If multiple modes are possible, choose the primary mode and mark secondary modes as optional. If a later user message changes the primary mode, treat it as a contract change unless the existing artifact can be patched locally without changing the unit contract.
-
-## Unit Contract
-
-Use a unit contract when the final deliverable is made of repeatable units: slides, report sections, document chapters, script scenes, short-video beats, UI screens, chart assets, data tables, code modules, or workflow steps.
-
-For each important unit, state:
-
-```text
-交付单元契约
-- 单元:
-- 单元任务:
-- 主结论/功能:
-- 必需证据/输入:
-- 表达或实现方式:
-- 不能说/不能做:
-- 过关标准:
-```
-
-Do not produce polished final units before the unit contract exists when the task is high-standard, client-facing, evidence-heavy, or reference-driven.
-
-For reports, decks, Feishu documents, scripts, or multi-section artifacts, do not merely promise a future unit contract. Output the important unit contracts before moving into execution.
-
-If the user provides reference materials, first extract the reference logic:
-
-- What structure or page task should be learned.
-- What evidence pattern should be learned.
-- What tone, density, or visual hierarchy should be learned.
-- What must not be copied directly.
-
-Reference materials calibrate structure and standards; they do not replace the task's own evidence and contract.
-
-## Metric and Chart Matrix
-
-Use a metric/chart matrix when the task contains numbers, tables, charts, dashboards, finance/business reporting, or quantified claims.
-
-For each important metric or chart, state:
-
-```text
-指标/图表口径
-- 名称:
-- 指标定义:
-- 来源文件/字段:
-- 筛选规则:
-- 分类规则:
-- 是否纳入特殊调整:
-- 是否排除:
-- 输出位置:
-- 验收检查:
-```
-
-Do not generate or update charts before their matrix exists when chart denominators, time ranges, categories, or source files are disputed or high-stakes.
-
-## Production Path Contract
-
-Use a production path contract when the task will create or modify artifacts, especially decks, reports, charts, images, scripts, data files, code, PDFs, or client-facing materials.
-
-State:
-
-- Source of truth: data table, script, raw asset, existing draft, reference material, repo source, or user-approved outline.
-- Build path: deterministic script, manual edit, rendering/export chain, generative image/text step, or mixed pipeline.
-- Tool boundary: what the chosen tool may change and what it must preserve.
-- Fidelity risk: numbers, formulas, screenshots, quotes, layout, brand identity, legal wording, or executable behavior that cannot be invented.
-- Review gate: the smallest preview, sample, diff, screenshot, render, or test that must pass before scaling.
-
-If a requested tool conflicts with the professional standard, narrow its role instead of silently following the tool request. For example, use generative image tools for layout moodboards or visual drafts, but not as the source of truth for evidence-heavy pages containing exact charts, word clouds, screenshots, or quoted text.
-
-Do not produce polished artifacts before the production path is compatible with the minimum reliable standard.
-
-## Minimum Reliable Standard
-
-Define the minimum reliable standard as professional bottom lines for this run, not an exhaustive ideal state.
-
-Examples:
-
-- Data analysis: metric dictionary, denominator checks, source lineage, one cross-output reconciliation.
-- Client-facing strategy: each key claim has evidence, safe wording, audience relevance, and action implication.
-- Script/creative output: target audience, channel, desired reaction/action, content mechanism, execution feasibility, and brand/safety boundary are clear.
-- KOC/social analysis: volume, sentiment/NSR, topic, quote, interaction, search demand, and competitive benchmark are not mixed.
-- Code work: relevant source inspection, change surface, tests or manual verification path, dirty worktree awareness.
-- Contract/policy: exact clause reference, obligation/risk split, business vs legal judgment separation.
-
-For high-standard outputs, use a small claim support check for the central claims only:
-
-```text
-关键结论校准
-- 结论:
-- 证据状态: 支持 / 部分支持 / 不支持
-- 证据来源:
-- 不能说:
-- 安全表达:
-- 需要的图表/样本/测试:
-```
-
-Do not run this for every sentence. Use it for the 3-5 claims that would shape the final deliverable.
-
-For unit-based deliverables, attach the claim support check to the units that carry the central claims, not to every unit.
-
-## Capacity Boundary
-
-Task boundary = professional standard boundary + capacity boundary.
-
-- Professional standard boundary decides what counts as correct or good.
-- Capacity boundary decides how much can be handled in this run.
-
-State concrete capacity drivers:
-
-- Volume driver: files, rows, slides, records, modules, pages, stakeholders, or artifacts.
-- Dependency driver: upstream sources, downstream outputs, tools, scripts, people, or systems.
-- Context driver: how much must be read before the task can be done safely.
-- Verification driver: how many checks or comparison surfaces are required.
-- Runtime driver: long scans, exports, tests, renders, uploads, or review loops.
-
-Read `references/capacity-boundary.md` for four execution modes and one-pass envelope guidance.
-
-## Question Policy
-
-Ask only for blocking unknowns. Everything else should become an assumption or an observation target.
-
-Blocking unknown:
-- Missing final deliverable, decision owner, required source, legal/financial/medical constraint, or non-negotiable standard.
-
-Assumable unknown:
-- Style preference, exact wording, minor format choice, incomplete examples, unless the final deliverable depends on them.
-
-Observable unknown:
-- Pattern, distribution, source quality, repo structure, sample quality, or data issue that can be inspected during the first evidence pass.
-
-Prefer:
-- "这个结果是给谁用的?"
-- "这次要交付分析稿、执行清单、改稿，还是直接产物?"
-- "有没有不能假设、不能改、必须查证的部分?"
-
-Avoid:
-- Asking cosmetic questions before the contract exists.
-- Asking questions answerable from files, data, or repo context.
-- Reopening the contract for details that fit inside the current contract.
-
-## Evidence-First Planning
-
-Before committing to a high-standard production plan or asking the user to choose a direction, inspect enough available evidence to identify the likely direction and material risks. Stop front-loaded research when further investigation is unlikely to change the next authorized action; continue targeted research during execution. If evidence is unavailable, try accessible in-scope sources before asking for only the missing input. Research is not a mandatory separate lane or exhaustive report.
-
-For data/client-facing analysis, this often means:
-
-- Source ledger and time range.
-- Field list and row counts.
-- Metric formulas and denominators.
-- Sample evidence for qualitative claims.
-- Existing outputs that must remain consistent.
-
-For script/creative output, this often means:
-
-- Audience, channel, desired reaction/action, and usage context.
-- Brand/product facts, constraints, and forbidden claims.
-- Content form: short video, KOC口播, TVC, scene script, plot script, title set, poster copy, or campaign idea.
-- Execution limits: length, format, production resources, platform style, and compliance risk.
-- Reference examples only as logic/taste calibration, not as something to copy blindly.
-
-For repo work, read `references/repo-risk-scan.md` and run a lightweight scan before committing to a substantial plan.
-
-## Change Control
-
-After `任务契约 v0` is locked, classify new information:
-
-- Local correction: fix wording, label, formula display, or a small mismatch without changing the contract.
-- Evidence supplement: add a source, sample, chart, or verification record without changing the deliverable.
-- Expression adjustment: improve audience fit, story, tone, or page logic without changing the evidence base.
-- Delivery-mode correction: adjust layout, density, navigation, packaging, or verification to match how the artifact will actually be used.
-- Contract change: reopen only when the final deliverable changes, evidence disproves a core claim, a professional standard was wrong, a capacity limit is exceeded, or a user changes a non-negotiable constraint.
-
-If it is not a contract change, do not restart the task. Patch locally and continue. A newly opened design space calls for useful comparison or investigation, not immediate commitment to the first familiar solution. Conversely, a clearly selected and authorized direction need not be reopened merely to exhibit alternatives. Refer to `../task-controller/references/continuous-execution.md` for moving between inquiry, execution and review.
-
-When KY-TASK state is active, assess whether feedback or new evidence actually changes an accepted premise, requirement, or permission. Correction words are signals, not sufficient proof; questions and quoted/negated phrases are not implementation authorization. For confirmed contract impact, even without keywords, call `task_controller_record_correction` with a unique event ID, evidence-backed summary, category, affected requirement IDs, and required `recommendedInvalidFromLane`; then use `task_controller_revise_contract` to consume all open corrections before resuming registration, gates, or completion. Follow `../task-controller/references/continuous-execution.md`; do not ask the user to reconfirm an already explicit change merely to satisfy internal bookkeeping.
-
-## Verification
-
-Verify against three layers:
-
-- Final deliverable: does the output serve the user, audience, and decision/action?
-- Delivery mode: does it work in the actual use environment, such as projection, self-reading, external sharing, operation, or handoff?
-- Professional standards: did the minimum reliable checks pass?
-- Capacity boundary: did the run stay inside the promised one-pass envelope?
-
-For composite tasks, verify every layer gate before handoff.
-
-## Learning From Prior Runs
-
-When the user cites a prior thread, failed run, or unsatisfactory skill use:
-
-1. Read the referenced thread or use the pasted summary if direct reading is unavailable.
-2. Extract the concrete miss: missing professional lens, weak task contract, wrong capacity estimate, missing layer gate, unsupported claim, poor change control, or weak verification.
-3. Turn the miss into a compact reusable rule in this skill or its references.
-4. Avoid storing long case history.
-
-## Failure Policy
-
-- If no workable contract can be formed, state exactly which contract field is blocking and ask for the minimum missing input.
-- If professional lens is unclear, choose the likely lens and mark it as an assumption; do not proceed with only generic task-type labels.
-- If delivery mode is ambiguous and likely changes layout, density, packaging, or verification, infer the likely primary mode and mark it as an assumption before production.
-- If the task is composite but only one layer is planned, stop and map the missing layers.
-- If composite lanes have no explicit semantic owner, dependency reasons, parallel waves, or join points, stop and compile the work orchestration plan before runtime selection.
-- If QA/review precedes the artifact it judges, or implementation depends on that premature QA, reject and re-orchestrate the lane map.
-- If design and production are split despite high handoff loss, combine them or define a concrete artifact handoff contract.
-- If the final deliverable is unit-based but unit gates are missing, stop before polished production and create the unit contract.
-- If the production path can corrupt the evidence, wording, layout, or executable behavior required by the professional standard, stop before polished production and define a safer path or a preview-only role for that tool.
-- If a key claim is only partially supported, use safe wording or make evidence acquisition the next phase.
-- If upstream evidence is sound but the final deliverable lacks audience fit, story, or actionability, the task is not complete.
-- If capacity demand exceeds the one-pass envelope, split the work and name the next gate.
-- If the user asks to proceed despite gaps, proceed only with explicit assumptions and change triggers.
+交接说明当前结果及依据、剩余关键未知与接下来怎样继续。实际使用与整体质量由制作承担者及总控持续判断，专业检查按后果与真实疑点安排；本技能不另设通用验收轮次。复盘时优先修正已有指导，能合并就合并，不把每个历史失误新增成永久规则。

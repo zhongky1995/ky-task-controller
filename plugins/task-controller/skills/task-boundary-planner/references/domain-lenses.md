@@ -1,6 +1,6 @@
 # Domain Lens Reference
 
-Use this reference when the task has a high professional standard. Pick only the relevant lens; do not load every domain into the response.
+Use the relevant lens to inform professional judgment in the current work. These are considerations, not a mandatory evidence packet, document set, or additional review stage. Keep definitions and evidence with the actual sources and artifacts; use a separate table only when it makes a consequential relationship easier to maintain. Existing machine-contract requirements remain binding.
 
 ## Data / Spreadsheet / Research Analysis
 
@@ -59,10 +59,10 @@ Common failure modes:
 
 Minimum evidence packet:
 - Source ledger for every workbook or document.
-- Metric/chart matrix before charts are generated.
+- Consistent metric definitions in chart sources; a matrix when disputed or complex relationships warrant one.
 - Business-line classification rules and special split rules.
 - Current output structure and any user-edited latest document.
-- A section/unit contract for every major report section.
+- A clear purpose and useful substance for major sections, expressed in the actual document or outline rather than a separate contract for each section.
 
 Acceptance checks:
 - Every headline number appears in a traceable table with source, filter, and classification rule.
@@ -91,7 +91,7 @@ Common failure modes:
 Minimum evidence packet:
 - Manifest/docs, entry points, nearby code, tests, and git status.
 - Relevant search results for symbols, routes, schemas, or file formats.
-- Verification command list before editing.
+- A suitable way to check the affected behavior, reusing project checks where applicable.
 
 ## Deck / Client-Facing Narrative / Visual Communication
 
@@ -120,14 +120,14 @@ Minimum evidence packet:
 
 Analysis-to-output bridge:
 - Convert data points into page tasks: diagnosis, comparison, proof, implication, or action.
-- For each page or section, require a claim, supporting evidence, interpretation, and next-step implication.
-- Reject pages that only display charts without a decision-relevant message.
+- Give each page or section a useful role in the reader's understanding. Substantive claims need supporting evidence and interpretation; orientation, transition, or reference pages need not manufacture a claim and next action.
+- Select charts for what they help the audience understand, rather than filling page space.
 - Check that terminology and metric scope match the data layer.
 - When reference pages are provided, extract their page task, evidence pattern, information density, and hierarchy before producing new pages.
-- For evidence-heavy decks, define a page-level evidence contract before visual polish.
+- For evidence-heavy decks, retain source links and exact meanings in the production material so visual choices preserve the evidence.
 - For projection or live presentation, require one screen one idea, large readable type, visual structures such as flowcharts or maps when they carry logic better than cards, and a speaker route.
 - Choose the production route before visual polish: exact-data pages need deterministic charts/assets; generative tools may provide moodboards or layout references but must not become the source of truth for exact evidence.
-- Before scaling a deck, review a contact sheet or representative pages against page task, delivery mode, evidence fidelity, brand markers, and readability.
+- When an uncertain design choice would affect many pages, examine concrete pages or a contact sheet to resolve it; continue directly when the approach is already supported. Read the evolving deck as a whole as well as inspecting individual pages.
 
 ## Script / Screenplay / Creative Content
 

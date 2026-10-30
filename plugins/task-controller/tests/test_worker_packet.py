@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import sys
 import unittest
+import json
 from copy import deepcopy
+from hashlib import sha256
 from pathlib import Path
 
 
@@ -149,6 +151,56 @@ class WorkerPacketTests(unittest.TestCase):
         modified_prompt = prompt.replace(packet["purpose"], "different text")
         self.assertNotEqual(modified_prompt, prompt)
         self.assertEqual(packet, validate_worker_packet(packet))
+
+    def test_bounded_assignment_retains_whole_intent_and_readable_contract(self) -> None:
+        item = blueprint()
+        item["outcome"] = {"businessGoal": "让读者判断方案是否适用", "supportedDecision": "决定是否采用"}
+        item["intentAnchors"] = [{"id": "purpose", "statement": "保留判断依据与适用边界", "source": "user-brief"}]
+        item["sources"][0]["locator"] = "brief.md"
+        item["changePolicy"]["preserve"][0]["statement"] = "Preserve uncertainty in the source"
+        packets = self.packets(item)
+        for packet in packets:
+            with self.subTest(node=packet["nodeId"]):
+                # Context survives even on a review/strategy node with no units.
+                self.assertEqual(item["outcome"], packet["intentContext"]["outcome"])
+                self.assertEqual(item["intentAnchors"], packet["intentContext"]["intentAnchors"])
+                prompt = render_worker_prompt(packet)
+                sections = dict(line.split(": ", 1) for line in prompt.splitlines() if ": " in line)
+                for label, field in (
+                    ("Project intent", "intentContext"), ("Input artifacts", "inputArtifacts"),
+                    ("Assigned units", "unitSpecs"), ("Sources", "sourceSpecs"),
+                    ("Decisions", "decisionSpecs"), ("Constraints", "constraints"),
+                    ("Standards", "standards"), ("Acceptance cases", "acceptanceCases"),
+                    ("Write policy", "writePolicySlice"), ("User approval required", "userApprovalRequired"),
+                ):
+                    self.assertEqual(packet[field], json.loads(sections[label]))
+
+    def test_intent_context_is_lineage_bound_and_legacy_packets_still_validate(self) -> None:
+        item = blueprint()
+        compiled, graph, routing = compiled_graph(item)
+        packet = compile_worker_packets(item, compiled, graph, routing)[0]
+
+        def redigest(value: dict) -> None:
+            content = deepcopy(value)
+            content.pop("packetDigest")
+            content["callbackContract"].pop("packetDigest")
+            digest = sha256(json.dumps(content, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            value["packetDigest"] = value["callbackContract"]["packetDigest"] = digest
+
+        changed = deepcopy(packet)
+        changed["intentContext"]["outcome"] = {"businessGoal": "A different project"}
+        with self.assertRaisesRegex(ValueError, "packetDigest"):
+            validate_worker_packet(changed)
+        redigest(changed)
+        with self.assertRaisesRegex(ValueError, "intentContext does not match"):
+            validate_worker_packet(changed, item, compiled["contractSpec"], graph)
+        legacy = deepcopy(packet)
+        legacy.pop("intentContext")
+        redigest(legacy)
+        self.assertEqual(legacy, validate_worker_packet(legacy, item, compiled["contractSpec"], graph))
+        sections = dict(line.split(": ", 1) for line in render_worker_prompt(legacy).splitlines() if ": " in line)
+        self.assertEqual({}, json.loads(sections["Project intent"]))
+        self.assertEqual(legacy["sourceSpecs"], json.loads(sections["Sources"]))
 
     def test_missing_graph_binding_cannot_generate_a_packet(self) -> None:
         item = blueprint()

@@ -43,8 +43,17 @@ def validate_checkpoint(raw):
                     nonempty(item["claim"], "claim")
                     statuses = {"untested", "supported", "refuted", "uncertain"}
                 else:
-                    if set(item) != {"id", "question", "status", "waitingOn", "answer", "evidenceIds"}:
+                    required_question = {"id", "question", "status", "waitingOn", "answer", "evidenceIds"}
+                    if not required_question <= set(item) or set(item) - required_question - {"completionImpact", "coreReason", "resolutionRevision"}:
                         raise ValueError("question requires id/question/status/waitingOn/answer/evidenceIds")
+                    if item.get("completionImpact", "local") not in {"core", "local"}:
+                        raise ValueError("invalid completionImpact")
+                    if item.get("completionImpact") == "core":
+                        nonempty(item.get("coreReason"), "coreReason")
+                        if item["status"] != "open":
+                            nonempty(item.get("answer"), "core resolution answer")
+                            if type(item.get("resolutionRevision")) is not int or item["resolutionRevision"] < 0:
+                                raise ValueError("closed core question requires resolutionRevision")
                     nonempty(item["question"], "question")
                     statuses = {"open", "answered", "withdrawn"}
                     if item["waitingOn"] not in {"controller", "user", "external", "none"}:
@@ -64,6 +73,8 @@ def validate_checkpoint(raw):
             raise ValueError("unknown evidence reference")
         if item["status"] in {"supported", "refuted", "answered"} and not refs:
             raise ValueError("resolved judgment requires evidence")
+        if item.get("completionImpact") == "core" and not refs:
+            raise ValueError("core question requires evidence")
     return result
 
 
@@ -98,6 +109,34 @@ def advance(ledger, *, event_id, expected_sequence, checkpoint, reason, evidence
                 fields = {"evidence": ("source", "summary"), "hypotheses": ("claim",), "questions": ("question",)}[group]
                 if any(item[field] != current_items[item["id"]][field] for field in fields):
                     raise ValueError("retain identity content; add a new ID for a changed claim/source")
+    old_questions = {q["id"]: q for q in previous.get("current", {}).get("questions", [])}
+    evidence_by_id = {e["id"]: e for e in checkpoint["evidence"]}
+    for q in checkpoint["questions"]:
+        old = old_questions.get(q["id"], {})
+        if old.get("completionImpact") == "core":
+            if q.get("completionImpact") != "core" or q.get("coreReason") != old.get("coreReason"):
+                raise ValueError("core impact/reason cannot be downgraded; resolve or withdraw with evidence")
+        if q.get("completionImpact") != "core":
+            continue
+        if old.get("completionImpact") != "core" and q["status"] != "open":
+            raise ValueError("register a core question open before resolving it")
+        if q["status"] != "open" and q != old:
+            if q.get("resolutionRevision") != (contract_revision if contract_revision is not None else 0):
+                raise ValueError("core resolution must bind the current contract revision")
+            baseline = old
+            if old.get("status") == "open":
+                # Evidence may be gathered in earlier updates before closing.
+                # Keep the opening finding stable throughout one open episode.
+                was_open = False
+                for event in previous["events"]:
+                    historical = next((item for item in event["checkpoint"]["questions"] if item["id"] == q["id"]), {})
+                    is_open = historical.get("completionImpact") == "core" and historical.get("status") == "open"
+                    if is_open and not was_open:
+                        baseline = historical
+                    was_open = is_open
+            baseline_content = {(evidence_by_id[ref]["source"], evidence_by_id[ref]["summary"]) for ref in baseline.get("evidenceIds", [])}
+            if not any((evidence_by_id[ref]["source"], evidence_by_id[ref]["summary"]) not in baseline_content for ref in q["evidenceIds"]):
+                raise ValueError("core resolution requires evidence beyond its opening finding or previous resolution")
     updated = deepcopy(previous)
     updated["sequence"] += 1
     updated["current"] = checkpoint
@@ -112,6 +151,18 @@ def compact(ledger):
     event = ledger["events"][-1]
     return {"sequence": ledger["sequence"], "current": ledger["current"],
             "lastChange": {key: event[key] for key in ("eventId", "reason", "evidenceIds", "impact", "contractRevision")}}
+
+
+def completion_blockers(ledger, contract_revision):
+    """Evidence bookkeeping only: this cannot judge whether a claim is true."""
+    blockers = []
+    for q in (ledger or {}).get("current", {}).get("questions", []):
+        if q.get("completionImpact") != "core":
+            continue
+        revision = contract_revision if contract_revision is not None else 0
+        if q["status"] == "open" or q.get("resolutionRevision") != revision:
+            blockers.append(f"Unresolved core question {q['id']}: {q['question']} (completion reason: {q['coreReason']})")
+    return blockers
 
 
 def advance_patch(ledger, *, patch, **kwargs):

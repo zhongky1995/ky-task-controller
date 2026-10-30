@@ -24,7 +24,7 @@ if str(PLUGIN_ROOT) not in sys.path:
     sys.path.insert(0, str(PLUGIN_ROOT))
 
 from control_plane.blueprint import compile_blueprint, validate_blueprint
-from control_plane.inquiry import advance as advance_inquiry, advance_patch as patch_inquiry, compact as compact_inquiry
+from control_plane.inquiry import advance as advance_inquiry, advance_patch as patch_inquiry, compact as compact_inquiry, completion_blockers as inquiry_completion_blockers
 from control_plane.capability_router import shadow_route
 from control_plane.decision_governance import (
     AUTHORITIES,
@@ -859,6 +859,29 @@ def semantic_universe(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {item["id"]: item for collection in collections for item in spec.get(collection, [])}
 
 
+def review_check_ids(state: dict[str, Any], lane: dict[str, Any]) -> set[str]:
+    """Keep intermediate artifact acceptance scoped to the declared subjects.
+
+    Final review still covers the complete contract. Requiring future acceptance
+    in a prerequisite review would otherwise force fabricated passes or a
+    dependency cycle. Global preservation, write and forbidden checks remain.
+    """
+    spec = state["contractSpec"]
+    required = {
+        item["id"]
+        for collection in ("preserve", "allowedChanges", "forbidden")
+        for item in spec[collection]
+    }
+    subjects = set(lane.get("verificationSubjects", lane.get("dependsOn", [])))
+    scoped = lane.get("verificationScope") == "intermediate-artifact" and bool(subjects)
+    subjects.add(lane["name"])
+    for item in spec["acceptance"]:
+        refs = item_lane_names(item)
+        if not scoped or not refs or subjects.intersection(refs):
+            required.add(item["id"])
+    return required
+
+
 def required_check_ids(state: dict[str, Any], lane: dict[str, Any]) -> set[str]:
     spec = state["contractSpec"]
     required = {item["id"] for item in spec["canonicalSources"] if item.get("required", True)}
@@ -877,7 +900,7 @@ def required_check_ids(state: dict[str, Any], lane: dict[str, Any]) -> set[str]:
         if item.get("required", True) and (lane_name in refs or not refs):
             required.add(item["id"])
     if lane.get("kind") == "review":
-        required.update(item["id"] for collection in ("preserve", "allowedChanges", "forbidden", "acceptance") for item in spec[collection])
+        required.update(review_check_ids(state, lane))
     return required
 
 
@@ -2252,6 +2275,10 @@ def is_artifact_review_lane(lane: dict[str, Any]) -> bool:
     )
 
 
+def is_final_review_lane(lane: dict[str, Any]) -> bool:
+    return is_artifact_review_lane(lane) and lane.get("verificationScope", "final-artifact") == "final-artifact"
+
+
 def review_coverage_blockers(
     state: dict[str, Any], review_lane: str, review_workers: list[dict[str, Any]]
 ) -> list[str]:
@@ -2270,11 +2297,7 @@ def review_coverage_blockers(
         blockers.extend(semantic_identity_blockers(state, reviewer))
         if is_semantic_strict(state) and reviewer.get("decision") == "pass":
             result_ids = {result.get("id") for result in reviewer.get("checkResults", [])}
-            review_ids = {
-                item["id"]
-                for collection in ("preserve", "allowedChanges", "forbidden", "acceptance")
-                for item in state["contractSpec"][collection]
-            }
+            review_ids = review_check_ids(state, find_lane(state, review_lane))
             missing_checks = sorted(review_ids - result_ids)
             if missing_checks:
                 blockers.append(
@@ -2346,6 +2369,8 @@ def evaluate_gate(
         worker_scope_lanes = list(lanes)
     blockers: list[str] = []
     warnings: list[str] = []
+    if target_index == len(lanes) or ((require_target_worker or include_target_workers) and is_final_review_lane(find_lane(state, target_lane))):
+        blockers.extend(inquiry_completion_blockers(state.get("inquiry"), revision))
     if state.get("enforcementMode") is None:
         warnings.append("Legacy schemaVersion 2 state has no enforcementMode; treating it as workflow_only without rewriting it.")
     open_events = open_correction_events(state)
@@ -2426,6 +2451,11 @@ def init(args: argparse.Namespace) -> None:
     path = Path(args.state).expanduser()
     prior_inquiry = load_state(path) if path.exists() else {}
     inquiry_only = prior_inquiry.get("stateKind") == "inquiry-only"
+    if args.force and not inquiry_only and any(
+        q.get("completionImpact") == "core"
+        for q in prior_inquiry.get("inquiry", {}).get("current", {}).get("questions", [])
+    ):
+        fail("Cannot replace a state with core question history; use revise-contract to preserve its judgments.")
     if inquiry_only and prior_inquiry["inquiry"]["events"][-1]["impact"] != "none":
         fail("Resolve inquiry impact before initializing execution.")
     if path.exists() and not args.force and not inquiry_only:
@@ -2706,13 +2736,14 @@ def finalization_gate(state: dict[str, Any]) -> dict[str, Any]:
     """The same terminal check is used by scheduling and actual finalization."""
     incomplete = [lane["name"] for lane in state.get("lanes", []) if lane.get("status") != "done"]
     blockers = ["finalize requires all lanes done: " + ", ".join(incomplete)] if incomplete else []
+    blockers.extend(inquiry_completion_blockers(state.get("inquiry"), state["contractRevision"]))
     if reserved_claims(state):
         blockers.append("Unreconciled dispatch claims remain; bind or reconcile host creation before finalization.")
     if active_workers(state):
         blockers.append("Active worker attempts remain.")
     if not incomplete:
         blockers.extend(evaluate_gate(state)["blockers"])
-    return {"allowed": not blockers, "blockers": blockers}
+    return {"allowed": not blockers, "blockers": list(dict.fromkeys(blockers))}
 
 
 def dispatch_frontier(state: dict[str, Any]) -> dict[str, Any]:
@@ -3602,6 +3633,7 @@ def inquiry_status(args: argparse.Namespace) -> None:
     result = compact_inquiry(state.get("inquiry"))
     result["contractRevision"] = state.get("contractRevision")
     result["openCorrectionEvents"] = open_correction_events(state)
+    result["completionBlockers"] = inquiry_completion_blockers(state.get("inquiry"), state.get("contractRevision"))
     if args.history:
         result["history"] = state.get("inquiry", {}).get("events", [])
     print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -3644,8 +3676,10 @@ def update_inquiry(args: argparse.Namespace) -> None:
         stale_current_approvals(state, f"inquiry impact: {correction_id}")
         invalidate_finalization(state, f"inquiry impact: {correction_id}")
     state["inquiry"] = ledger
+    if inquiry_completion_blockers(ledger, state.get("contractRevision")):
+        invalidate_finalization(state, "unresolved core inquiry question")
     save_state(path, state)
-    print(json.dumps({**compact_inquiry(ledger), "openCorrectionEvents": open_correction_events(state)}, ensure_ascii=False, indent=2))
+    print(json.dumps({**compact_inquiry(ledger), "completionBlockers": inquiry_completion_blockers(ledger, state.get("contractRevision")), "openCorrectionEvents": open_correction_events(state)}, ensure_ascii=False, indent=2))
 
 
 def record_approval(args: argparse.Namespace) -> None:
@@ -3976,6 +4010,10 @@ def record_callback(args: argparse.Namespace) -> None:
         if worker.get("packetId") != packet["packetId"] or worker.get("packetDigest") != packet["packetDigest"]:
             fail("Callback packet identity must match the registered worker packet.")
     lane = find_lane(state, from_lane)
+    if args.gate_decision == "pass" and is_final_review_lane(lane):
+        blockers = inquiry_completion_blockers(state.get("inquiry"), state["contractRevision"])
+        if blockers:
+            fail("core_completion_blocked: " + "; ".join(blockers))
     require_approved_target_authorization(state, lane)
     if lane.get("status") != "running":
         fail(f"Worker callback requires lane running: {from_lane} (status={lane.get('status', '')})")
