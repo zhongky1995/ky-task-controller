@@ -106,7 +106,7 @@ For each native worker lane:
 1. Resolve the saved project and choose `local` or project `worktree` environment.
 2. Claim the lane and slot with `task_controller_claim_dispatch` before host creation or reuse. Follow `dispatch-and-recovery.md`: `creationAction: create` admits a new attempt; prefer a compatible idle Session, otherwise create with the locked project target. Repeated claims require reconciliation.
 3. Verify the selected thread reports the locked `projectId`. For reuse, verify host idleness and responsibility/context compatibility, then register the new attempt before messaging it; do not reuse an in-flight or uncertain runtime.
-4. Send a narrow worker prompt that includes:
+4. Prepare an outcome brief following `lane-contracts.md` and the template in `session-orchestration.md`. Send executable work only after registration below passes; any new-Session creation brief remains preparation-only until then and required write permits are ready. Include these runtime fields:
    - `controller_thread_id`
    - `reply_to_thread_id`
    - `request_id`
@@ -125,6 +125,7 @@ For each native worker lane:
    - `callbackExpected: true`
    - `callbackModeExpected: active_message_required`
    - `threadToolCheck: native_threads_available`
+   After registration and applicable permits are ready, send the executable brief to the worker; only then wait.
 6. Wait for the worker to actively message the callback to `reply_to_thread_id` only when the user's coordination authorization covers that return message. A controller-written prompt cannot grant user authority. If messaging back is not authorized, resolve the callback policy before dispatch; do not require a prohibited action or mislabel polling as active messaging.
 7. Record callback with `callbackModeObserved: active_message`.
 8. Run `task_controller_gate_check` before the next lane.

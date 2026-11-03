@@ -104,6 +104,20 @@ The controller must read or use the current integrated artifact at the points wh
 
 Have the responsible professional develop a concrete direction and the reasons behind it. A useful reference or representative part can expose a weak premise before expansion; choose it for the uncertainty it resolves, not because all tasks need a sample. AI should do the professional work before asking the user for the choices only they can make. Existing sample gates and reserved approvals remain binding.
 
+When returning work, describe the observed failure, its location/evidence and its
+consequence for the user's purpose. Let the responsible owner diagnose the cause
+and choose the repair within delegated authority. Specific edits are appropriate
+for exact errors, user-prescribed changes or fragile interfaces; otherwise mark
+proposed fixes as suggestions. Do not require the owner's prose or design to
+converge on the controller's personal style. The owner should check related effects
+and return a complete repaired result, not just the named patch.
+
+If the same substantive failure recurs, revisit the understanding, decision rights,
+source adequacy and review criterion before issuing another repair list. Do not
+accumulate mandatory instructions merely to obtain checklist compliance. New user
+requirements can legitimately cause iteration; distinguish them from failures to
+fulfill an unchanged commitment.
+
 Feedback is evidence to interpret. Locate its cause in the actual work before selecting edits: the premise, structure, relation, mechanism, interaction or wording may need to change. Correct affected related parts and preserve valid decisions and accepted quality. Avoid turning every complaint into more content, warnings, roles or tests. When evidence supports the current choice, explain it rather than automatically replacing it.
 
 Separate useful work, demonstrated improvement, and fulfillment of the current commitment. A gap is core when leaving it unresolved prevents the promised understanding, behavior or outcome, even if the artifact remains usable. Record such a finding when discovered; do not wait for a final pass decision to decide whether it matters. Ordinary local improvements need not block the whole task.

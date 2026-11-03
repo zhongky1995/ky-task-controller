@@ -19,7 +19,7 @@ list is a scheduling snapshot, not a reservation or permission to create.
    lane and one worker slot.
 4. A response with `creationAction: create` admits a new dispatch attempt. It
    permits host creation when needed, but does not require a new Session.
-   Put the request ID in the narrow worker prompt so interrupted creation can
+   Put the request ID in the worker brief so interrupted creation can
    be found later. Retain the returned `claimId`.
 5. Reuse a compatible idle Session (below), or create one with the locked project target. After its actual thread
    ID is available and project affinity is checked, register it with that

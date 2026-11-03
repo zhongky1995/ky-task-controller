@@ -4,7 +4,7 @@ Use when meaningful work is actually changing hands. The planner supplies the cu
 
 ## Preserve the judgment
 
-Link the current artifact and effective decisions, including the reasons that matter to the next choice. Explain what the contribution is for, which inputs are dependable, what remains uncertain, and how its result will be used. Reuse the project's current entrypoint; avoid making the recipient reconstruct intent from a long transcript or only the latest correction.
+Link the current artifact and effective decisions, including the reasons that matter to the next choice. Distinguish user requirements and authorized binding decisions from planner/controller hypotheses and suggestions. Delegate the professional choices needed to finish the outcome; use [lane contracts](../../task-controller/references/lane-contracts.md) for that distinction rather than turning a provisional plan into a fixed production recipe. Explain what the contribution is for, which inputs are dependable, what remains uncertain, and how its result will be used. Reuse the project's current entrypoint; avoid making the recipient reconstruct intent from a long transcript or only the latest correction.
 
 Keep closely coupled definition and production with one continuing owner where practical. A separate researcher, designer or reviewer does not replace that owner's responsibility to inspect and integrate the actual result. Hand off a responsibility only when the expected benefit outweighs lost context and setup. Do not create a lane per professional consideration, step or document.
 
