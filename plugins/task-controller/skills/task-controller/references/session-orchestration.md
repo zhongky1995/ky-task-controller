@@ -44,7 +44,7 @@ jobs separate and never use a producer as its own reviewer.
 Good worker boundaries:
 
 - A worker can complete its output without needing to write the final artifact.
-- A worker has a narrow input packet.
+- A worker has a focused responsibility packet with whole-project context and delegated professional decisions; focused does not mean a prescribed solution.
 - A worker has a clear pass/fail gate.
 - A worker's output can be merged by the controller.
 - A worker has a `tool_profile` and, for external writes, a `credential_policy`.
@@ -216,7 +216,7 @@ Minimum dispatch sequence for mandatory split tasks:
 3. Call `task_controller_ready_lanes`.
 4. Atomically claim each ready lane; for `creationAction: create`, first consider a compatible idle Session, otherwise create its worker with `target: {type: "project", projectId, environment}`. The response admits an attempt, not a mandatory new conversation. Claims and live attempts together consume `maxParallelWorkers`.
 5. Verify each new thread reports the locked `projectId`. A mismatched or empty project is a blocker and must not be registered as valid.
-6. Send each worker a narrow prompt and register it with project identity, `claimId`, and `requestId`.
+6. Register each worker with project identity, `claimId`, and `requestId`, then send the executable outcome brief with relevant context, actual constraints and decision authority (see `lane-contracts.md`). A new Session creation message is preparation-only until registration and required write permits are ready; for reuse, registration precedes messaging as specified in `dispatch-and-recovery.md`.
 7. After the admitted batch is dispatched, call host waits with at most eight targets per call. The plugin supplies a grouping plan, not an automatic wait loop; the controller retains cursors and rotates groups.
 8. Record each callback as workers finish and refill open slots from the next ready frontier.
 9. Run the relevant dependency gate before downstream implementation.
@@ -301,9 +301,9 @@ Managed workers use `callbackModeExpected: managed_result_collected`; record the
 
 If a worker only final-answers in its own thread when active messaging was required, the controller may recover the content for audit, but it must record `callbackModeObserved: controller_poll_recovery`. This is a degraded callback, not proof that the controller was actively triggered.
 
-If any worker returns `needs-work` or `blocked`, `task_controller_gate_check` must block implementation or final review until a fix lane resolves the issue.
+If any worker returns `needs-work` or `blocked`, `task_controller_gate_check` must block implementation or final review until bounded recovery and any required independent verification resolve the issue. Reuse the responsible lane/Session when compatible; a negative callback alone does not require a new lane.
 
-After a fix lane and review lane prove the issue is resolved, keep the original negative worker for audit but update it to `status: resolved` with notes naming the resolving lane/request. `resolved` means "the finding was valid, and later work fixed it"; it is different from `superseded`, which means "this worker was replaced, mistaken, duplicate, or only an audit placeholder."
+After the repair attempt and required review prove the issue is resolved, keep the original negative worker for audit but update it to `status: resolved` with notes naming the resolving lane/request. `resolved` means "the finding was valid, and later work fixed it"; it is different from `superseded`, which means "this worker was replaced, mistaken, duplicate, or only an audit placeholder."
 
 Before independent review registration, provide `reviewsWorkerIds` covering its compiled `verificationSubjects` and assign a different `runtimeHandle`. Intermediate review consumes named input artifacts, not every earlier writer or future production. Final review covers final writers; legacy states retain earlier-writer scope. Writer completion does not wait for a future review; downstream review and final gates enforce coverage. A fresh prompt on the same runtime is still self-review. Strict semantic acceptance requirements remain in force.
 
@@ -335,9 +335,23 @@ So the controller does:
 
 ## Worker Prompt Template
 
-```text
-你是 KY-TASK 的一个独立 worker，不是总控。
+Apply `lane-contracts.md` when composing the substantive brief. Adapt the prompts
+to the job; these labels are not a request for another form. Include the technical
+identity/callback fields required by the selected runtime separately below it.
 
+```text
+你负责的完整成果及用途:
+原始需求、读者/使用者与必要上下文:
+可用材料与证据（区分已核事实和待核前提）:
+硬约束及依据（用户明确要求、已授权决定、接口/权限等）:
+由你自主决定的专业事项:
+总控参考判断（可根据证据调整，不是默认验收标准）:
+交付与完成判断（按实际用途，不以覆盖条目代替质量）:
+
+在上述权限与约束内，自行研究、取舍、制作、自审并完成整件成果。
+发现总控假设有误时给出依据并在授权内调整；涉及绑定约定、权限或保留给用户的决定，按既有修订机制提出具体冲突。
+
+运行与回报约定：你是 KY-TASK 的独立工作者，按以下身份回报总控。
 controller_thread_id:
 reply_to_thread_id:
 request_id:
@@ -351,11 +365,7 @@ project_id: <executionPolicy.targetProjectId>
 project_target_type: project
 project_environment: local | worktree
 
-任务:
-
-允许使用的输入:
-
-输出格式:
+交付所需格式/接口（仅填写确有必要的限制）:
 
 证据规则:
 

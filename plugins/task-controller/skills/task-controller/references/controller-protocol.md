@@ -6,7 +6,7 @@ Use this reference when a task needs a controller rather than a single uninterru
 
 - Preserve the locked task contract.
 - Decide which lanes exist and in what order.
-- Keep lane outputs narrow and mergeable.
+- Keep lane responsibilities cohesive and their outputs integrable; delegate the professional decisions needed to complete each outcome, using `lane-contracts.md`.
 - Prevent unsupported evidence or assumptions from entering final artifacts.
 - Ensure only the approved lane writes to external systems.
 - Run final review against the original task, not against what happened to be built.
